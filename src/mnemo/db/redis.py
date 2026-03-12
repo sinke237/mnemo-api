@@ -1,6 +1,9 @@
 """
 Redis connection management.
 Used for rate limiting, job queues, and session caching.
+
+Note: redis.asyncio lacks complete type stubs. This module is excluded
+from strict mypy checking via pyproject.toml [[tool.mypy.overrides]].
 """
 
 import redis.asyncio as aioredis
@@ -9,10 +12,10 @@ from src.mnemo.core.config import get_settings
 
 settings = get_settings()
 
-_redis_client: aioredis.Redis | None = None
+_redis_client = None
 
 
-def get_redis() -> aioredis.Redis:
+def get_redis():  # noqa: ANN201
     """
     Returns the shared Redis client instance.
     Initialised once at application startup.

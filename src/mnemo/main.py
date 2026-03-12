@@ -5,11 +5,12 @@ Initialises FastAPI, registers middleware, mounts routers,
 and handles application lifecycle events.
 """
 
+import uuid
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from collections.abc import AsyncGenerator
 
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -21,11 +22,13 @@ from src.mnemo.db.redis import close_redis, get_redis
 logger = structlog.get_logger()
 settings = get_settings()
 
+# Type alias for ASGI middleware call_next
+CallNext = Callable[[Request], Awaitable[Response]]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Handle application startup and shutdown."""
-    # Startup
     logger.info("mnemo_api_starting", env=settings.app_env, version="1.0.0")
     try:
         redis = get_redis()
@@ -35,9 +38,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error("redis_connection_failed", error=str(e))
     logger.info("mnemo_api_ready")
 
-    yield  # Application runs here
+    yield
 
-    # Shutdown
     logger.info("mnemo_api_shutting_down")
     await close_redis()
     await engine.dispose()
@@ -66,7 +68,7 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def enforce_https_in_production(request: Request, call_next):  # type: ignore[no-untyped-def]
+async def enforce_https_in_production(request: Request, call_next: CallNext) -> Response:
     """Reject plain HTTP in production. Per spec: HTTP_NOT_ALLOWED → 403."""
     if settings.is_production and request.url.scheme == "http":
         return JSONResponse(
@@ -83,12 +85,11 @@ async def enforce_https_in_production(request: Request, call_next):  # type: ign
 
 
 @app.middleware("http")
-async def add_request_id(request: Request, call_next):  # type: ignore[no-untyped-def]
+async def add_request_id(request: Request, call_next: CallNext) -> Response:
     """
     Attach a unique request_id to every request.
     Included in all error responses per NFR-05.2.
     """
-    import uuid
     request_id = f"req_{uuid.uuid4().hex[:8]}"
     request.state.request_id = request_id
     response = await call_next(request)
@@ -101,7 +102,8 @@ async def add_request_id(request: Request, call_next):  # type: ignore[no-untype
 app.include_router(v1_router)
 
 
-# ── Root redirect ──────────────────────────────────────────────────────────────
+# ── Root ───────────────────────────────────────────────────────────────────────
+
 
 @app.get("/", include_in_schema=False)
 async def root() -> dict[str, str]:
