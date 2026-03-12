@@ -25,7 +25,7 @@ settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Import all models here so Alembic can detect them for autogenerate
-# from mnemo.models import user, deck, flashcard  # noqa: F401
+from mnemo.models import user, api_key
 
 target_metadata = Base.metadata
 
@@ -54,9 +54,33 @@ async def run_async_migrations() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-    await connectable.dispose()
+    try:
+        async with connectable.connect() as connection:
+            await connection.run_sync(do_run_migrations)
+        await connectable.dispose()
+    except Exception as exc:  # pragma: no cover - fallback for missing DB during local dev
+        # If the database is unreachable (e.g. running locally without Postgres),
+        # detect if the user requested autogenerate. Autogenerate requires an
+        # online DB connection (Alembic needs to inspect the current DB schema),
+        # so we must fail fast with a helpful message instead of falling back to
+        # offline mode (which cannot satisfy autogenerate and leads to confusing
+        # errors like "Can't use literal_binds setting without as_sql mode").
+        import sys
+
+        if "--autogenerate" in sys.argv:
+            print("Error: cannot run `--autogenerate` because the database is unreachable.")
+            print(f"Database connection error: {exc}")
+            print("Ensure the configured DATABASE_URL points to an accessible Postgres instance, or run alembic inside your docker-compose 'api' container.")
+            raise
+
+        # For non-autogenerate operations (e.g., offline `upgrade --sql`), fall
+        # back to the offline path so users can generate SQL scripts without a
+        # live DB during local development.
+        print(
+            "Warning: could not connect to the database; running in offline mode instead."
+        )
+        print(f"Database connection error: {exc}")
+        run_migrations_offline()
 
 
 def run_migrations_online() -> None:

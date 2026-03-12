@@ -4,6 +4,9 @@
 .vscode
 .env
 
+dev_docs
+upgrade.sql
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

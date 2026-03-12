@@ -2,7 +2,7 @@
 
 Spaced repetition and active recall, delivered as a developer API.
 
-**Version:** 1.0.0 · **Author:** Enow Sinke · **Spec:** [API Specification v1.0](docs/spec.md)
+**Version:** 1.0.0 · **Spec:** [API Specification v1.0](dev_docs/spec.md)
 
 [![CI](https://github.com/sinke237/mnemo-api/actions/workflows/ci.yml/badge.svg)](https://github.com/sinke237/mnemo-api/actions/workflows/ci.yml)
 
@@ -174,4 +174,4 @@ mnemo-api/
 
 Base URL: `https://api.mnemo.dev/v1`
 
-See `/docs` (local) or the [API Specification](docs/spec.md) for full endpoint documentation.
+See `/docs` (local) or the [API Specification](dev_docs/spec.md) for full endpoint documentation.
