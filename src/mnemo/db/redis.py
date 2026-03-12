@@ -5,7 +5,7 @@ Used for rate limiting, job queues, and session caching.
 
 import redis.asyncio as aioredis
 
-from mnemo.core.config import get_settings
+from src.mnemo.core.config import get_settings
 
 settings = get_settings()
 

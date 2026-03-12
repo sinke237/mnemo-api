@@ -7,8 +7,8 @@ and all dependencies are reachable.
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from mnemo.db.database import check_db_connection
-from mnemo.db.redis import check_redis_connection
+from src.mnemo.db.database import check_db_connection
+from src.mnemo.db.redis import check_redis_connection
 
 router = APIRouter(tags=["health"])
 

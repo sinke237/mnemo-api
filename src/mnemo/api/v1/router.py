@@ -5,7 +5,7 @@ All v1 endpoints are registered here and mounted under /v1 in main.py.
 
 from fastapi import APIRouter
 
-from mnemo.api.v1.routes import health
+from src.mnemo.api.v1.routes import health
 
 router = APIRouter(prefix="/v1")
 
