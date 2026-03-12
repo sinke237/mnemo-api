@@ -14,10 +14,10 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.mnemo.api.v1.router import router as v1_router
-from src.mnemo.core.config import get_settings
-from src.mnemo.db.database import engine
-from src.mnemo.db.redis import close_redis, get_redis
+from mnemo.api.v1.router import router as v1_router
+from mnemo.core.config import get_settings
+from mnemo.db.database import engine
+from mnemo.db.redis import close_redis, get_redis
 
 logger = structlog.get_logger()
 settings = get_settings()

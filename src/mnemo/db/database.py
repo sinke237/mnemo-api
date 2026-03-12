@@ -5,10 +5,11 @@ Uses SQLAlchemy async engine with asyncpg driver.
 
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-from src.mnemo.core.config import get_settings
+from mnemo.core.config import get_settings
 
 settings = get_settings()
 
@@ -31,6 +32,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy models."""
+
     pass
 
 
@@ -55,8 +57,6 @@ async def check_db_connection() -> bool:
     Health check: verify the database is reachable and responsive.
     Returns True if healthy, False otherwise.
     """
-    from sqlalchemy import text
-
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))

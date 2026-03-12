@@ -33,8 +33,11 @@ cp .env.example .env
 docker compose up postgres redis -d
 ```
 
-**4. Install Python dependencies**
+**4. Create virtual environment and install dependencies**
 ```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+echo $VIRTUAL_ENV # check which venv you're in
 pip install -e ".[dev]"
 ```
 
@@ -55,6 +58,29 @@ curl http://localhost:8000/v1/health
 ```
 
 API docs: http://localhost:8000/docs
+
+---
+
+## Pre-Push / CI Pipeline Checks
+
+To ensure your code passes the CI pipeline before pushing, make sure your virtual environment is activated and run the exact checks the pipeline runs:
+
+```bash
+# 1. Activate your virtual environment (if not already active)
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# 2. Format code check (remove --check to auto-fix)
+black --check src/ tests/
+
+# 3. Lint code (add --fix to auto-fix issues)
+ruff check src/ tests/
+
+# 4. Type check
+mypy src/mnemo/ --exclude src/mnemo/db/redis.py
+
+# 5. Run tests with coverage (fails if coverage is below 70%)
+pytest tests/ -v
+```
 
 ---
 

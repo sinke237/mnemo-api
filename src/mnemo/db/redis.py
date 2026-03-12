@@ -6,23 +6,25 @@ Note: redis.asyncio lacks complete type stubs. This module is excluded
 from strict mypy checking via pyproject.toml [[tool.mypy.overrides]].
 """
 
+from typing import Any
+
 import redis.asyncio as aioredis
 
-from src.mnemo.core.config import get_settings
+from mnemo.core.config import get_settings
 
 settings = get_settings()
 
-_redis_client = None
+_redis_client: Any = None
 
 
-def get_redis():  # noqa: ANN201
+def get_redis() -> Any:
     """
     Returns the shared Redis client instance.
     Initialised once at application startup.
     """
     global _redis_client
     if _redis_client is None:
-        _redis_client = aioredis.from_url(
+        _redis_client = aioredis.from_url(  # type: ignore[no-untyped-call]
             settings.redis_url,
             encoding="utf-8",
             decode_responses=True,

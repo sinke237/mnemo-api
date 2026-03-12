@@ -7,8 +7,8 @@ and all dependencies are reachable.
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from src.mnemo.db.database import check_db_connection
-from src.mnemo.db.redis import check_redis_connection
+from mnemo.db.database import check_db_connection
+from mnemo.db.redis import check_redis_connection
 
 router = APIRouter(tags=["health"])
 
@@ -35,11 +35,9 @@ async def health_check() -> HealthResponse:
 
     all_ok = db_ok and redis_ok
 
-    response = HealthResponse(
+    return HealthResponse(
         status="ok" if all_ok else "degraded",
         db="ok" if db_ok else "unreachable",
         redis="ok" if redis_ok else "unreachable",
         version="1.0.0",
     )
-
-    return response

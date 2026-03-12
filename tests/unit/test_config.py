@@ -5,7 +5,7 @@ Tests for application configuration and settings validation.
 import pytest
 from pydantic import ValidationError
 
-from src.mnemo.core.config import Settings
+from mnemo.core.config import Settings
 
 
 def test_default_settings_load_successfully() -> None:
