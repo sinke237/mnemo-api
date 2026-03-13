@@ -2,7 +2,7 @@
 
 Spaced repetition and active recall, delivered as a developer API.
 
-**Version:** 1.0.0 · **Spec:** [API Specification v1.0](dev_docs/spec.md)
+**Version:** 1.0.0 · **Spec:** [API Specification v1.0](https://coming-soon)
 
 [![CI](https://github.com/sinke237/mnemo-api/actions/workflows/ci.yml/badge.svg)](https://github.com/sinke237/mnemo-api/actions/workflows/ci.yml)
 

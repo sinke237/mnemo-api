@@ -25,6 +25,15 @@ db_dep = Depends(get_db)
 current_user_dep = Depends(get_current_user_from_token)
 
 
+def _map_value_error_to_error_code(e: ValueError) -> ErrorCode:
+    msg = str(e).lower()
+    if "timezone" in msg or "missing timezone" in msg or "multiple timezones" in msg:
+        return ErrorCode.INVALID_TIMEZONE
+    elif "country" in msg or "unsupported country" in msg:
+        return ErrorCode.INVALID_COUNTRY_CODE
+    return ErrorCode.VALIDATION_ERROR
+
+
 @router.post(
     "",
     status_code=201,
@@ -59,28 +68,14 @@ async def create_user(
         return UserResponse.model_validate(user)
 
     except ValueError as e:
-        # Map ValueError messages to the most appropriate error code so
-        # clients can branch on `error.code` reliably.
-        msg = str(e)
-        lowered = msg.lower()
-
-        if (
-            "timezone" in lowered
-            or "missing timezone" in lowered
-            or "multiple timezones" in lowered
-        ):
-            error_code = ErrorCode.INVALID_TIMEZONE
-        elif "country" in lowered or "unsupported country" in lowered:
-            error_code = ErrorCode.INVALID_COUNTRY_CODE
-        else:
-            error_code = ErrorCode.VALIDATION_ERROR
+        error_code = _map_value_error_to_error_code(e)
 
         raise HTTPException(
             status_code=400,
             detail={
                 "error": {
                     "code": error_code.value,
-                    "message": msg,
+                    "message": str(e),
                     "status": 400,
                 }
             },
@@ -209,27 +204,14 @@ async def update_user(
         return UserResponse.model_validate(user)
 
     except ValueError as e:
-        # Map ValueError messages to specific error codes (mirror create_user)
-        msg = str(e)
-        lowered = msg.lower()
-
-        if (
-            "timezone" in lowered
-            or "missing timezone" in lowered
-            or "multiple timezones" in lowered
-        ):
-            error_code = ErrorCode.INVALID_TIMEZONE
-        elif "country" in lowered or "unsupported country" in lowered:
-            error_code = ErrorCode.INVALID_COUNTRY_CODE
-        else:
-            error_code = ErrorCode.VALIDATION_ERROR
+        error_code = _map_value_error_to_error_code(e)
 
         raise HTTPException(
             status_code=400,
             detail={
                 "error": {
                     "code": error_code.value,
-                    "message": msg,
+                    "message": str(e),
                     "status": 400,
                 }
             },

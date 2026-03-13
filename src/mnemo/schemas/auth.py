@@ -11,7 +11,9 @@ from pydantic import BaseModel, Field
 class TokenRequest(BaseModel):
     """Request body for POST /v1/auth/token"""
 
-    user_id: str = Field(..., description="User ID (usr_xxxxxxxx)", pattern=r"^usr_[a-f0-9]{16}$")
+    user_id: str = Field(
+        ..., description="User ID (usr_[a-f0-9]{16})", pattern=r"^usr_[a-f0-9]{16}$"
+    )
     api_key: str = Field(
         ...,
         description="API key (mnm_live_xxx or mnm_test_xxx)",

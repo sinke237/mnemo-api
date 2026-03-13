@@ -12,7 +12,6 @@ from mnemo.schemas.user import UserCreate, UserUpdate
 from mnemo.utils.id_generator import generate_user_id
 from mnemo.utils.timezone import (
     country_has_multiple_timezones,
-    get_timezone_for_country,
     get_timezones_for_country,
     validate_timezone,
 )
@@ -37,42 +36,49 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
     Raises:
         ValueError: If country is invalid or timezone is missing for multi-timezone country
     """
-    # Determine timezone
-    if user_data.timezone:
-        # User provided timezone - validate it first
-        if not validate_timezone(user_data.timezone):
-            raise ValueError(f"Invalid timezone: {user_data.timezone}")
 
-        # Validate country and ensure provided timezone is allowed for that country
-        tz_list = get_timezones_for_country(user_data.country)
-        if not tz_list:
-            raise ValueError(f"Unsupported country code: {user_data.country}")
+    def validate_timezone_and_country(user_data: UserCreate) -> None:
+        """
+        Validate timezone and country for user creation.
 
-        if country_has_multiple_timezones(user_data.country):
-            if user_data.timezone not in tz_list:
-                raise ValueError(
-                    f"Country {user_data.country} requires one of {tz_list}; "
-                    f"got {user_data.timezone}"
-                )
+        Args:
+            user_data: User creation data
+
+        Returns:
+            None
+        """
+        if user_data.timezone is not None:
+            user_data.timezone = user_data.timezone.strip()
+            if not user_data.timezone:
+                raise ValueError("Timezone cannot be blank or whitespace-only.")
+            if not validate_timezone(user_data.timezone):
+                raise ValueError(f"Invalid timezone: {user_data.timezone}")
+            tz_list = get_timezones_for_country(user_data.country)
+            if not tz_list:
+                raise ValueError(f"Unsupported country code: {user_data.country}")
+            if country_has_multiple_timezones(user_data.country):
+                if user_data.timezone not in tz_list:
+                    raise ValueError(
+                        f"Country {user_data.country} requires one of {tz_list}; "
+                        f"got {user_data.timezone}"
+                    )
+            else:
+                if user_data.timezone != tz_list[0]:
+                    raise ValueError(
+                        f"Invalid timezone {user_data.timezone} for {user_data.country}"
+                    )
         else:
-            # Single-timezone country: provided timezone must match the country's timezone
-            if user_data.timezone != tz_list[0]:
+            if country_has_multiple_timezones(user_data.country):
                 raise ValueError(
-                    f"Timezone {user_data.timezone} is not valid for country {user_data.country}"
+                    f"Country {user_data.country} has multiple timezones. "
+                    "User must select specific timezone."
                 )
+            else:
+                # Set timezone for single-timezone countries
+                user_data.timezone = get_timezones_for_country(user_data.country)[0]
 
-        timezone = user_data.timezone
-    else:
-        # Derive timezone from country
-        if country_has_multiple_timezones(user_data.country):
-            raise ValueError(
-                f"Country {user_data.country} has multiple timezones. "
-                "User must select specific timezone."
-            )
-
-        timezone = get_timezone_for_country(user_data.country)
-        if timezone is None:
-            raise ValueError(f"Unsupported country code: {user_data.country}")
+    # Validate timezone and country
+    validate_timezone_and_country(user_data)
 
     # Create user record
     user = User(
@@ -80,7 +86,7 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
         display_name=user_data.display_name,
         country=user_data.country.upper(),
         locale=user_data.locale,
-        timezone=timezone,
+        timezone=user_data.timezone,
         education_level=user_data.education_level.value if user_data.education_level else None,
         preferred_language=user_data.preferred_language,
         daily_goal_cards=user_data.daily_goal_cards,
@@ -137,6 +143,10 @@ async def update_user(db: AsyncSession, user_id: str, user_data: UserUpdate) -> 
         user.locale = user_data.locale
 
     if user_data.timezone is not None:
+        user_data.timezone = user_data.timezone.strip()
+        if not user_data.timezone:
+            raise ValueError("Timezone cannot be blank or whitespace-only.")
+
         # Validate timezone before updating
         if not validate_timezone(user_data.timezone):
             raise ValueError(f"Invalid timezone: {user_data.timezone}")
@@ -151,7 +161,7 @@ async def update_user(db: AsyncSession, user_id: str, user_data: UserUpdate) -> 
         if allowed_tzs and user_data.timezone not in allowed_tzs:
             raise ValueError(
                 f"Timezone {user_data.timezone} is not valid for country {user.country}"
-            )
+            )  # Shortened to comply with E501.
 
         user.timezone = user_data.timezone
 

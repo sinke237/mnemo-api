@@ -9,6 +9,7 @@ import hmac
 import json
 import uuid
 from datetime import UTC, datetime
+from functools import lru_cache
 from typing import cast
 
 from sqlalchemy import select
@@ -22,13 +23,12 @@ from mnemo.services import user as user_service
 from mnemo.utils.id_generator import generate_api_key
 
 
+@lru_cache
 def _signing_key() -> bytes:
     """Return the HMAC signing key derived from the application secret."""
     settings: Settings = get_settings()
-    # Settings validator ensures `api_key_secret` is present and valid.
-    # pydantic Settings fields can be treated as ``Any`` by static checkers;
-    # cast the encoded secret to ``bytes`` so mypy understands the return type.
-    return cast(bytes, settings.api_key_secret.encode("utf-8"))
+    api_key_secret = str(settings.api_key_secret)  # Ensure it's a string
+    return api_key_secret.encode("utf-8")
 
 
 def hash_api_key(api_key: str) -> str:
@@ -276,7 +276,12 @@ def extract_api_key_prefix(plain_key: str) -> str:
         ValueError: If the key format is malformed or invalid
     """
     parts = plain_key.split("_")
-    if len(parts) < 3:
-        raise ValueError("Malformed API key: expected at least two segments before the key payload")
+    if len(parts) < 3 or not parts[2].strip():
+        raise ValueError("Malformed API key: expected at least two segments and non-empty payload")
+
+    # Optionally validate parts[0] and parts[1] against an allowlist of known prefixes
+    allowed_prefixes = {"mnm", "test"}
+    if parts[0] not in allowed_prefixes:
+        raise ValueError(f"Unknown prefix: {parts[0]}")
 
     return f"{parts[0]}_{parts[1]}_"
