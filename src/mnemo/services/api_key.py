@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mnemo.core.config import get_settings
+from mnemo.core.config import Settings, get_settings
 from mnemo.core.constants import DEFAULT_API_KEY_SCOPES, PermissionScope
 from mnemo.models.api_key import APIKey
 from mnemo.services import user as user_service
@@ -24,13 +24,11 @@ from mnemo.utils.id_generator import generate_api_key
 
 def _signing_key() -> bytes:
     """Return the HMAC signing key derived from the application secret."""
-    settings = get_settings()
-    secret = getattr(settings, "api_key_secret", None)
-    if not secret:
-        raise RuntimeError(
-            "API key secret is not configured. Set API_KEY_SECRET in environment/config."
-        )
-    return cast(bytes, secret.encode())
+    settings: Settings = get_settings()
+    # Settings validator ensures `api_key_secret` is present and valid.
+    # pydantic Settings fields can be treated as ``Any`` by static checkers;
+    # cast the encoded secret to ``bytes`` so mypy understands the return type.
+    return cast(bytes, settings.api_key_secret.encode("utf-8"))
 
 
 def hash_api_key(api_key: str) -> str:

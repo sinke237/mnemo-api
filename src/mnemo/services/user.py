@@ -201,5 +201,6 @@ async def user_exists(db: AsyncSession, user_id: str) -> bool:
     Returns:
         True if user exists, False otherwise
     """
-    user = await get_user_by_id(db, user_id)
-    return user is not None
+    # Use a lightweight existence query to avoid loading the full user row.
+    result = await db.execute(select(1).where(User.id == user_id).limit(1))
+    return result.scalar_one_or_none() is not None

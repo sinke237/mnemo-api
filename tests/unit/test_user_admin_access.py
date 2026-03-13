@@ -1,0 +1,101 @@
+from datetime import datetime
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from mnemo.api.dependencies import get_current_user_from_token
+from mnemo.core.constants import PermissionScope
+from mnemo.main import app
+from mnemo.models.user import User
+
+
+@pytest.mark.asyncio
+async def test_admin_can_access_other_user(monkeypatch):
+    # Create a target user to be returned by user_service.get_user_by_id
+    target = User(
+        id="usr_a1b2c3d4e5f6a7b8",
+        display_name="Target User",
+        country="US",
+        locale="en-US",
+        timezone="America/New_York",
+        education_level=None,
+        preferred_language="en",
+        daily_goal_cards=20,
+    )
+    # Provide required audit fields expected by UserResponse
+    target.created_at = datetime.utcnow()
+
+    # Create a current (admin) user
+    admin_user = User(
+        id="usr_deadbeefcafebabe",
+        display_name="Admin",
+        country="US",
+        locale="en-US",
+        timezone="America/New_York",
+        education_level=None,
+        preferred_language="en",
+        daily_goal_cards=20,
+    )
+    # Attach token_scopes indicating admin
+    admin_user.token_scopes = [PermissionScope.ADMIN.value]
+    admin_user.created_at = datetime.utcnow()
+
+    # Override dependencies
+    app.dependency_overrides.clear()
+    app.dependency_overrides[get_current_user_from_token] = lambda: admin_user
+
+    def fake_get_user_by_id(db, user_id):
+        return target
+
+    monkeypatch.setattr("mnemo.services.user.get_user_by_id", fake_get_user_by_id)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        resp = await ac.get(f"/v1/users/{target.id}")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == target.id
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_access_other_user(monkeypatch):
+    target = User(
+        id="usr_b1b2c3d4e5f6a7b8",
+        display_name="Target 2",
+        country="US",
+        locale="en-US",
+        timezone="America/New_York",
+        education_level=None,
+        preferred_language="en",
+        daily_goal_cards=20,
+    )
+    # Provide required audit fields expected by UserResponse
+    target.created_at = datetime.utcnow()
+
+    # Non-admin current user
+    user = User(
+        id="usr_feedfacecafef00d",
+        display_name="Normal",
+        country="US",
+        locale="en-US",
+        timezone="America/New_York",
+        education_level=None,
+        preferred_language="en",
+        daily_goal_cards=20,
+    )
+    user.token_scopes = []
+
+    app.dependency_overrides.clear()
+    app.dependency_overrides[get_current_user_from_token] = lambda: user
+
+    def fake_get_user_by_id(db, user_id):
+        return target
+
+    monkeypatch.setattr("mnemo.services.user.get_user_by_id", fake_get_user_by_id)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        resp = await ac.get(f"/v1/users/{target.id}")
+
+    assert resp.status_code == 403
+    # FastAPI wraps the detail in a top-level `detail` key
+    assert resp.json()["detail"]["error"]["code"] == "INSUFFICIENT_SCOPE"

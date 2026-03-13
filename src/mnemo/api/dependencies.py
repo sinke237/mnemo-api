@@ -10,7 +10,7 @@ Module uses module-level dependency singletons to avoid ruff B008.
 """
 
 from collections.abc import Callable, Coroutine
-from typing import Any
+from typing import Any, cast
 
 from fastapi import Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -131,6 +131,17 @@ async def get_current_user_from_token(
                 }
             },
         )
+    # Attach token scopes to the returned user instance so downstream
+    # dependencies and route handlers can rely on scopes without re-parsing
+    # the raw token.
+    try:
+        scopes = cast(list[str], payload.get("scopes", []))
+    except Exception:
+        scopes = []
+
+    # Attach a transient attribute to the SQLAlchemy model instance.
+    # Direct attribute assignment is fine on ORM instances for transient data.
+    user.token_scopes = scopes
 
     return user
 
@@ -177,13 +188,18 @@ def require_user_scope(required_scope: PermissionScope) -> Callable[..., Corouti
         db: AsyncSession = db_dep,
     ) -> None:
         # Validate token and user existence (propagates 401/404 as needed)
-        await get_current_user_from_token(credentials, db)
+        user = await get_current_user_from_token(credentials, db)
 
         # At this point the token is syntactically valid and the user exists.
-        # Extract the raw token and enforce the required scope.
-        token = credentials.credentials if credentials is not None else None
+        # Use the attached `token_scopes` attribute (transient) to enforce
+        # the required scope without re-decoding the raw token.
+        scopes = getattr(user, "token_scopes", []) or []
 
-        if token is None or not auth_service.token_has_scope(token, required_scope):
+        # Admin scope grants all permissions
+        if PermissionScope.ADMIN.value in scopes:
+            return None
+
+        if required_scope.value not in scopes:
             raise HTTPException(
                 status_code=403,
                 detail={

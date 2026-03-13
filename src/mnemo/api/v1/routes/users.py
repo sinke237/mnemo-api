@@ -3,10 +3,15 @@ User profile routes.
 Handles user CRUD operations per spec section 11: User Profiles.
 """
 
+import inspect
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mnemo.api.dependencies import get_current_user_from_token, require_scope
+from mnemo.api.dependencies import (
+    get_current_user_from_token,
+    require_scope,
+)
 from mnemo.core.constants import ErrorCode, PermissionScope
 from mnemo.db.database import get_db
 from mnemo.models.user import User
@@ -22,7 +27,6 @@ current_user_dep = Depends(get_current_user_from_token)
 
 @router.post(
     "",
-    response_model=UserResponse,
     status_code=201,
     dependencies=[Depends(require_scope(PermissionScope.ADMIN))],
     responses={
@@ -85,7 +89,6 @@ async def create_user(
 
 @router.get(
     "/{user_id}",
-    response_model=UserResponse,
     responses={
         401: {"model": ErrorResponse, "description": "Invalid or expired token"},
         403: {"model": ErrorResponse, "description": "Forbidden"},
@@ -109,22 +112,30 @@ async def get_user(
     - Users can only access their own profile
     - Admin scope can access any user
     """
-    # Verify user is accessing their own profile
+    # Verify user is accessing their own profile. Admin-scoped tokens may
+    # access any user's profile. The `get_current_user_from_token` dependency
+    # attaches `token_scopes` to the returned User instance so we read that
+    # attribute instead of re-decoding the raw token here.
     if current_user.id != user_id:
-        # Check if user has admin scope (would require checking token scopes)
-        # For now, only allow accessing own profile
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "error": {
-                    "code": ErrorCode.INSUFFICIENT_SCOPE.value,
-                    "message": "You can only access your own profile",
-                    "status": 403,
-                }
-            },
-        )
+        scopes = getattr(current_user, "token_scopes", []) or []
+        if PermissionScope.ADMIN.value not in scopes:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": {
+                        "code": ErrorCode.INSUFFICIENT_SCOPE.value,
+                        "message": "You can only access your own profile",
+                        "status": 403,
+                    }
+                },
+            )
 
-    user = await user_service.get_user_by_id(db, user_id)
+    # Support service implementations or test fakes that may be sync or async.
+    maybe = user_service.get_user_by_id(db, user_id)
+    if inspect.isawaitable(maybe):
+        user = await maybe
+    else:
+        user = maybe
 
     if user is None:
         raise HTTPException(
@@ -143,7 +154,6 @@ async def get_user(
 
 @router.patch(
     "/{user_id}",
-    response_model=UserResponse,
     responses={
         400: {"model": ErrorResponse, "description": "Invalid timezone"},
         401: {"model": ErrorResponse, "description": "Invalid or expired token"},
@@ -199,13 +209,27 @@ async def update_user(
         return UserResponse.model_validate(user)
 
     except ValueError as e:
-        # Invalid timezone
+        # Map ValueError messages to specific error codes (mirror create_user)
+        msg = str(e)
+        lowered = msg.lower()
+
+        if (
+            "timezone" in lowered
+            or "missing timezone" in lowered
+            or "multiple timezones" in lowered
+        ):
+            error_code = ErrorCode.INVALID_TIMEZONE
+        elif "country" in lowered or "unsupported country" in lowered:
+            error_code = ErrorCode.INVALID_COUNTRY_CODE
+        else:
+            error_code = ErrorCode.VALIDATION_ERROR
+
         raise HTTPException(
             status_code=400,
             detail={
                 "error": {
-                    "code": ErrorCode.VALIDATION_ERROR.value,
-                    "message": str(e),
+                    "code": error_code.value,
+                    "message": msg,
                     "status": 400,
                 }
             },

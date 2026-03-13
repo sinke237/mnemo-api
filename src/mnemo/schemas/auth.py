@@ -3,6 +3,8 @@ Authentication schemas.
 Token request/response models per spec section 02: Authentication.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -21,7 +23,7 @@ class TokenRequest(BaseModel):
             "example": {
                 "user_id": "usr_a1b2c3d4e5f6a7b8",
                 "api_key": (
-                    "mnm_live_" "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+                    "mnm_live_abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
                 ),
             }
         }
@@ -32,8 +34,10 @@ class TokenResponse(BaseModel):
     """Response for successful token generation"""
 
     access_token: str = Field(..., description="JWT access token")
-    expires_in: int = Field(..., description="Token lifetime in seconds")
-    token_type: str = Field(default="Bearer", description="Token type (always 'Bearer')")
+    expires_in: int = Field(..., gt=0, description="Token lifetime in seconds")
+    token_type: Literal["Bearer"] = Field(
+        default="Bearer", description="Token type (always 'Bearer')"
+    )
 
     model_config = {
         "json_schema_extra": {
