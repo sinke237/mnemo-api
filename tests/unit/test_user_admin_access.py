@@ -46,7 +46,7 @@ async def test_admin_can_access_other_user(monkeypatch):
     try:
         app.dependency_overrides[get_current_user_from_token] = lambda: admin_user
 
-        def fake_get_user_by_id(db, user_id):
+        async def fake_get_user_by_id(db, user_id):
             return target
 
         monkeypatch.setattr("mnemo.services.user.get_user_by_id", fake_get_user_by_id)

@@ -69,8 +69,8 @@ To ensure your code passes the CI pipeline before pushing, make sure your virtua
 # 1. Activate your virtual environment (if not already active)
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# 2. Format code check (remove --check to auto-fix)
-black --check src/ tests/
+# 2. Format code (auto-formats). Add --check for a dry-run/validation only.
+black src/ tests/
 
 # 3. Lint code (add --fix to auto-fix issues)
 ruff check src/ tests/
@@ -80,6 +80,9 @@ mypy src/mnemo/ --exclude src/mnemo/db/redis.py
 
 # 5. Run tests with coverage (fails if coverage is below 70%)
 pytest tests/ -v
+
+# 6. Check coverage
+pytest --cov=src/mnemo --cov-report=term-missing
 ```
 
 ---
@@ -174,4 +177,4 @@ mnemo-api/
 
 Base URL: `https://api.mnemo.dev/v1`
 
-See `/docs` (local) or the [API Specification](dev_docs/spec.md) for full endpoint documentation.
+See `/docs` (local) or the [API Specification](docs/spec.md) for full endpoint documentation.

@@ -3,8 +3,6 @@ User profile routes.
 Handles user CRUD operations per spec section 11: User Profiles.
 """
 
-import inspect
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +11,12 @@ from mnemo.api.dependencies import (
     require_scope,
 )
 from mnemo.core.constants import ErrorCode, PermissionScope
+from mnemo.core.exceptions import (
+    InvalidCountryCodeError,
+    InvalidTimezoneError,
+    MissingTimezoneError,
+    TimezoneNotAllowedError,
+)
 from mnemo.db.database import get_db
 from mnemo.models.user import User
 from mnemo.schemas.error import ErrorResponse
@@ -23,15 +27,6 @@ router = APIRouter(prefix="/users", tags=["users"])
 # module-level Depends singletons to satisfy ruff B008
 db_dep = Depends(get_db)
 current_user_dep = Depends(get_current_user_from_token)
-
-
-def _map_value_error_to_error_code(e: ValueError) -> ErrorCode:
-    msg = str(e).lower()
-    if "timezone" in msg or "missing timezone" in msg or "multiple timezones" in msg:
-        return ErrorCode.INVALID_TIMEZONE
-    elif "country" in msg or "unsupported country" in msg:
-        return ErrorCode.INVALID_COUNTRY_CODE
-    return ErrorCode.VALIDATION_ERROR
 
 
 @router.post(
@@ -67,14 +62,24 @@ async def create_user(
         user = await user_service.create_user(db, user_data)
         return UserResponse.model_validate(user)
 
-    except ValueError as e:
-        error_code = _map_value_error_to_error_code(e)
-
+    except InvalidCountryCodeError as e:
         raise HTTPException(
             status_code=400,
             detail={
                 "error": {
-                    "code": error_code.value,
+                    "code": ErrorCode.INVALID_COUNTRY_CODE.value,
+                    "message": str(e),
+                    "status": 400,
+                }
+            },
+        ) from e
+
+    except (InvalidTimezoneError, MissingTimezoneError) as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": ErrorCode.INVALID_TIMEZONE.value,
                     "message": str(e),
                     "status": 400,
                 }
@@ -107,10 +112,7 @@ async def get_user(
     - Users can only access their own profile
     - Admin scope can access any user
     """
-    # Verify user is accessing their own profile. Admin-scoped tokens may
-    # access any user's profile. The `get_current_user_from_token` dependency
-    # attaches `token_scopes` to the returned User instance so we read that
-    # attribute instead of re-decoding the raw token here.
+    # Verify user is accessing their own profile or has admin scope
     if current_user.id != user_id:
         scopes = getattr(current_user, "token_scopes", []) or []
         if PermissionScope.ADMIN.value not in scopes:
@@ -125,12 +127,8 @@ async def get_user(
                 },
             )
 
-    # Support service implementations or test fakes that may be sync or async.
-    maybe = user_service.get_user_by_id(db, user_id)
-    if inspect.isawaitable(maybe):
-        user = await maybe
-    else:
-        user = maybe
+    # Fetch user (no more inspect.isawaitable - services are always async)
+    user = await user_service.get_user_by_id(db, user_id)
 
     if user is None:
         raise HTTPException(
@@ -203,14 +201,12 @@ async def update_user(
 
         return UserResponse.model_validate(user)
 
-    except ValueError as e:
-        error_code = _map_value_error_to_error_code(e)
-
+    except (InvalidTimezoneError, TimezoneNotAllowedError) as e:
         raise HTTPException(
             status_code=400,
             detail={
                 "error": {
-                    "code": error_code.value,
+                    "code": ErrorCode.INVALID_TIMEZONE.value,
                     "message": str(e),
                     "status": 400,
                 }
