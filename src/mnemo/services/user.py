@@ -13,6 +13,7 @@ from mnemo.utils.id_generator import generate_user_id
 from mnemo.utils.timezone import (
     country_has_multiple_timezones,
     get_timezone_for_country,
+    get_timezones_for_country,
     validate_timezone,
 )
 
@@ -38,9 +39,28 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
     """
     # Determine timezone
     if user_data.timezone:
-        # User provided timezone - validate it
+        # User provided timezone - validate it first
         if not validate_timezone(user_data.timezone):
             raise ValueError(f"Invalid timezone: {user_data.timezone}")
+
+        # Validate country and ensure provided timezone is allowed for that country
+        tz_list = get_timezones_for_country(user_data.country)
+        if not tz_list:
+            raise ValueError(f"Unsupported country code: {user_data.country}")
+
+        if country_has_multiple_timezones(user_data.country):
+            if user_data.timezone not in tz_list:
+                raise ValueError(
+                    f"Country {user_data.country} requires one of {tz_list}; "
+                    f"got {user_data.timezone}"
+                )
+        else:
+            # Single-timezone country: provided timezone must match the country's timezone
+            if user_data.timezone != tz_list[0]:
+                raise ValueError(
+                    f"Timezone {user_data.timezone} is not valid for country {user_data.country}"
+                )
+
         timezone = user_data.timezone
     else:
         # Derive timezone from country
