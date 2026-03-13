@@ -6,7 +6,7 @@ Per spec section 02: Authentication and NFR-03.2.
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -27,11 +27,12 @@ class APIKey(Base):  # type: ignore[misc]
     __tablename__ = "api_keys"
 
     # Primary key
-    id: Mapped[str] = mapped_column(String(32), primary_key=True)  # Generated ID
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)  # Generated ID (key_ + UUID4 hex)
 
     # User reference
+    # Declare an explicit foreign key so Alembic autogenerate picks it up
     user_id: Mapped[str] = mapped_column(
-        String(32), nullable=False, index=True
+        String(32), ForeignKey("users.id"), nullable=False, index=True
     )  # References users.id
 
     # Key data (hashed per NFR-03.2)
@@ -42,6 +43,10 @@ class APIKey(Base):  # type: ignore[misc]
         String(20), nullable=False, index=True
     )  # mnm_live_ or mnm_test_
     key_hint: Mapped[str] = mapped_column(String(8), nullable=False)  # Last 4 chars for UI display
+
+    # Key lookup fragment (short indexed fragment to speed up lookups)
+    # Stored as truncated hex (e.g., first 16 chars of HMAC-SHA256 of plain key)
+    key_lookup: Mapped[str] = mapped_column(String(16), nullable=True, index=True)
 
     # Metadata
     name: Mapped[str | None] = mapped_column(

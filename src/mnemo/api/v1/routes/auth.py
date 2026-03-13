@@ -70,8 +70,8 @@ async def get_access_token(
             status_code=401,
             detail={
                 "error": {
-                    "code": ErrorCode.INVALID_API_KEY.value,
-                    "message": f"User not found: {request.user_id}",
+                    "code": ErrorCode.USER_NOT_FOUND.value,
+                    "message": "User not found",
                     "status": 401,
                 }
             },

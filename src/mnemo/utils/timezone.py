@@ -79,6 +79,7 @@ COUNTRY_TO_TIMEZONE: dict[str, str] = {
     "IQ": "Asia/Baghdad",  # Iraq
     "IR": "Asia/Tehran",  # Iran
     "TR": "Europe/Istanbul",  # Turkey
+    "RU": "Europe/Moscow",  # Russia (primary)
     # Oceania
     "AU": "Australia/Sydney",  # Australia (Eastern - most populous)
     "NZ": "Pacific/Auckland",  # New Zealand

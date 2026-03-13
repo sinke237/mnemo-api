@@ -9,7 +9,8 @@ Provides helper dependencies used across API routes:
 Module uses module-level dependency singletons to avoid ruff B008.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 from fastapi import Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -33,7 +34,7 @@ auth_header_dep = Depends(_bearer_scheme)
 
 
 async def get_api_key_from_header(
-    x_api_key: str | None = Header(default=None, convert_underscores=False),
+    x_api_key: str | None = Header(default=None),
     db: AsyncSession = db_dep,
 ) -> APIKey:
     """Validate the `X-API-Key` header and return the APIKey record.
@@ -161,25 +162,28 @@ def require_scope(required_scope: PermissionScope) -> Callable[..., APIKey]:
     return _require
 
 
-def require_user_scope(required_scope: PermissionScope) -> Callable[..., None]:
-    """Return a dependency that enforces a JWT token has `required_scope`."""
+def require_user_scope(required_scope: PermissionScope) -> Callable[..., Coroutine[Any, Any, None]]:
+    """Return a dependency that enforces a JWT token has `required_scope`.
 
-    def _require(credentials: HTTPAuthorizationCredentials | None = auth_header_dep) -> None:
-        if credentials is None:
-            raise HTTPException(
-                status_code=401,
-                detail={
-                    "error": {
-                        "code": ErrorCode.INVALID_API_KEY.value,
-                        "message": "Missing or invalid Authorization header",
-                        "status": 401,
-                    }
-                },
-            )
+    This dependency first validates the token and ensures the user exists by
+    delegating to `get_current_user_from_token`. That function raises the
+    appropriate 401/404 HTTPExceptions for missing/invalid/expired tokens or
+    non-existent users. After authentication succeeds, we verify the token
+    contains the required scope via `auth_service.token_has_scope`.
+    """
 
-        token = credentials.credentials
+    async def _require(
+        credentials: HTTPAuthorizationCredentials | None = auth_header_dep,
+        db: AsyncSession = db_dep,
+    ) -> None:
+        # Validate token and user existence (propagates 401/404 as needed)
+        await get_current_user_from_token(credentials, db)
 
-        if not auth_service.token_has_scope(token, required_scope):
+        # At this point the token is syntactically valid and the user exists.
+        # Extract the raw token and enforce the required scope.
+        token = credentials.credentials if credentials is not None else None
+
+        if token is None or not auth_service.token_has_scope(token, required_scope):
             raise HTTPException(
                 status_code=403,
                 detail={

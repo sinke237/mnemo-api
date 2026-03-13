@@ -52,17 +52,33 @@ async def create_user(
     """
     try:
         user = await user_service.create_user(db, user_data)
-        await db.commit()
         return UserResponse.model_validate(user)
 
     except ValueError as e:
-        # Invalid country code or missing timezone for multi-timezone country
+        # Map ValueError messages to the most appropriate error code so
+        # clients can branch on `error.code` reliably.
+        msg = str(e)
+        lowered = msg.lower()
+
+        if "country" in lowered or "unsupported country" in lowered:
+            error_code = ErrorCode.INVALID_COUNTRY_CODE
+        elif (
+            "timezone" in lowered
+            or "missing timezone" in lowered
+            or "multiple timezones" in lowered
+        ):
+            # No specific timezone error codes exist in ErrorCode; use
+            # VALIDATION_ERROR to indicate an input validation problem.
+            error_code = ErrorCode.VALIDATION_ERROR
+        else:
+            error_code = ErrorCode.VALIDATION_ERROR
+
         raise HTTPException(
             status_code=400,
             detail={
                 "error": {
-                    "code": ErrorCode.INVALID_COUNTRY_CODE.value,
-                    "message": str(e),
+                    "code": error_code.value,
+                    "message": msg,
                     "status": 400,
                 }
             },
@@ -180,7 +196,6 @@ async def update_user(
                 },
             )
 
-        await db.commit()
         return UserResponse.model_validate(user)
 
     except ValueError as e:

@@ -7,21 +7,30 @@ Per spec section 02: Authentication and NFR-03.2.
 import hashlib
 import hmac
 import json
+import uuid
 from datetime import UTC, datetime
 from typing import cast
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.core.config import get_settings
 from mnemo.core.constants import DEFAULT_API_KEY_SCOPES, PermissionScope
 from mnemo.models.api_key import APIKey
+from mnemo.services import user as user_service
 from mnemo.utils.id_generator import generate_api_key
 
 
 def _signing_key() -> bytes:
     """Return the HMAC signing key derived from the application secret."""
-    return cast(bytes, get_settings().jwt_secret_key.encode())
+    settings = get_settings()
+    secret = getattr(settings, "api_key_secret", None)
+    if not secret:
+        raise RuntimeError(
+            "API key secret is not configured. Set API_KEY_SECRET in environment/config."
+        )
+    return cast(bytes, secret.encode())
 
 
 def hash_api_key(api_key: str) -> str:
@@ -92,6 +101,8 @@ async def create_api_key(
 
     # Hash the key
     key_hash = hash_api_key(plain_key)
+    # Short lookup fragment (first 16 hex chars of HMAC) to index candidate set
+    key_lookup = key_hash[:16]
 
     # Default scopes
     if scopes is None:
@@ -99,9 +110,10 @@ async def create_api_key(
 
     # Create record
     api_key_record = APIKey(
-        id=f"key_{datetime.now(UTC).timestamp()}",  # Simple timestamp-based ID
+        id=f"key_{uuid.uuid4().hex}",  # Cryptographically secure UUID4-based ID
         user_id=user_id,
         key_hash=key_hash,
+        key_lookup=key_lookup,
         key_prefix=prefix,
         key_hint=key_hint,
         name=name,
@@ -110,8 +122,18 @@ async def create_api_key(
         is_active=True,
     )
 
+    # Ensure referenced user exists to avoid creating orphaned API keys.
+    user_exists = await user_service.user_exists(db, user_id)
+    if not user_exists:
+        raise ValueError("User not found")
+
     db.add(api_key_record)
-    await db.flush()
+    # Flush and handle potential integrity errors (race or DB-level FK enforcement)
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        # Re-raise as ValueError so callers can handle a consistent exception type
+        raise ValueError("Referential integrity error creating API key") from exc
 
     return api_key_record, plain_key
 
@@ -155,10 +177,12 @@ async def validate_api_key(db: AsyncSession, plain_key: str) -> APIKey | None:
     except IndexError:
         return None  # Malformed key
 
-    # Find all active keys with this prefix
+    # Compute lookup fragment and find all active keys matching prefix+lookup
+    lookup = hash_api_key(plain_key)[:16]
     result = await db.execute(
         select(APIKey).where(
             APIKey.key_prefix == prefix,
+            APIKey.key_lookup == lookup,
             APIKey.is_active == True,  # noqa: E712
         )
     )

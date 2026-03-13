@@ -13,15 +13,15 @@ class TokenRequest(BaseModel):
     api_key: str = Field(
         ...,
         description="API key (mnm_live_xxx or mnm_test_xxx)",
-        min_length=40,  # mnm_live_ (9) + 64 hex chars = 73
+        pattern=r"^mnm_(live|test)_[a-f0-9]{64}$",
     )
 
     model_config = {
         "json_schema_extra": {
             "example": {
-                "user_id": "usr_a1b2c3d4e5f6g7h8",
+                "user_id": "usr_a1b2c3d4e5f6a7b",
                 "api_key": (
-                    "mnm_live_abcdef1234567890abcdef1234567890" "abcdef1234567890abcdef1234567890"
+                    "mnm_live_" "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
                 ),
             }
         }

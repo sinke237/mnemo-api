@@ -3,14 +3,14 @@ Application constants.
 Error codes, permission scopes, education levels, and other enums per spec.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 # ── Error Codes ────────────────────────────────────────────────────────────────
 # Per spec section 12: Error Handling
 # Machine-readable, stable, UPPER_SNAKE_CASE
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     """Standard error codes returned by the API."""
 
     # Validation errors (400)
@@ -54,7 +54,7 @@ class ErrorCode(str, Enum):
 # Per spec section 02: Authentication
 
 
-class PermissionScope(str, Enum):
+class PermissionScope(StrEnum):
     """Permission scopes for API keys and JWT tokens."""
 
     DECKS_READ = "decks:read"
@@ -78,7 +78,7 @@ DEFAULT_API_KEY_SCOPES = [
 # Per spec section 11: User Profiles
 
 
-class EducationLevel(str, Enum):
+class EducationLevel(StrEnum):
     """User education level for profile personalization."""
 
     NONE = "none"
@@ -92,7 +92,7 @@ class EducationLevel(str, Enum):
 # Per spec section 08: Study Sessions
 
 
-class SessionMode(str, Enum):
+class SessionMode(StrEnum):
     """Study session modes."""
 
     REVIEW = "review"  # Spaced repetition, full feedback
@@ -104,7 +104,7 @@ class SessionMode(str, Enum):
 # Per spec section 10: CSV Import
 
 
-class ImportMode(str, Enum):
+class ImportMode(StrEnum):
     """CSV import modes."""
 
     MERGE = "merge"  # Add new cards, skip duplicates

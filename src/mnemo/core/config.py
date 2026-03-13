@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     jwt_expiry_seconds: int = Field(default=3600)
     api_key_live_prefix: str = Field(default="mnm_live_")
     api_key_test_prefix: str = Field(default="mnm_test_")
+    # Secret used specifically for API key HMAC hashing. Separate from JWT secret
+    # so rotating JWT signing keys does not invalidate stored API keys.
+    api_key_secret: str = Field(default="dev_apikey_secret_replace_in_production_with_64_char_hex")
 
     # ── Rate Limiting ──────────────────────────────────────────────────────────
     rate_limit_read_per_minute: int = Field(default=600)
@@ -55,6 +58,15 @@ class Settings(BaseSettings):
             return v  # allow in dev
         if len(v) < 32:
             raise ValueError("JWT_SECRET_KEY must be at least 32 characters")
+        return v
+
+    @field_validator("api_key_secret")
+    @classmethod
+    def validate_api_key_secret(cls, v: str) -> str:
+        if v == "dev_apikey_secret_replace_in_production_with_64_char_hex":
+            return v  # allow in dev
+        if len(v) < 32:
+            raise ValueError("API_KEY_SECRET must be at least 32 characters")
         return v
 
     @property

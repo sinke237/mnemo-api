@@ -120,6 +120,13 @@ async def update_user(db: AsyncSession, user_id: str, user_data: UserUpdate) -> 
         # Validate timezone before updating
         if not validate_timezone(user_data.timezone):
             raise ValueError(f"Invalid timezone: {user_data.timezone}")
+
+        # Only allow changing timezone for users in multi-timezone countries
+        if not country_has_multiple_timezones(user.country):
+            raise ValueError(
+                f"Cannot change timezone for country {user.country}; use country-derived timezone"
+            )
+
         user.timezone = user_data.timezone
 
     if user_data.education_level is not None:
