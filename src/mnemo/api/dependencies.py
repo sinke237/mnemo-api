@@ -83,7 +83,7 @@ async def get_current_user_from_token(
             status_code=401,
             detail={
                 "error": {
-                    "code": ErrorCode.INVALID_API_KEY.value,
+                    "code": ErrorCode.INVALID_TOKEN.value,
                     "message": "Missing or invalid Authorization header",
                     "status": 401,
                 }
@@ -125,7 +125,7 @@ async def get_current_user_from_token(
             status_code=401,
             detail={
                 "error": {
-                    "code": ErrorCode.INVALID_API_KEY.value,
+                    "code": ErrorCode.INVALID_TOKEN.value,
                     "message": f"User not found: {user_id}",
                     "status": 401,
                 }

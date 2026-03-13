@@ -96,7 +96,7 @@ async def create_api_key(
     plain_key = generate_api_key(is_live=is_live)
 
     # Extract prefix and hint
-    prefix = plain_key.split("_")[0] + "_" + plain_key.split("_")[1] + "_"  # mnm_live_ or mnm_test_
+    prefix = extract_api_key_prefix(plain_key)
     key_hint = plain_key[-4:]  # Last 4 chars for UI display
 
     # Hash the key
@@ -144,7 +144,7 @@ async def get_api_key_by_hash(db: AsyncSession, key_hash: str) -> APIKey | None:
 
     Args:
         db: Database session
-        key_hash: Bcrypt hash of the key
+        key_hash: HMAC-SHA-256 hex digest of the full key
 
     Returns:
         APIKey record or None if not found
@@ -173,17 +173,21 @@ async def validate_api_key(db: AsyncSession, plain_key: str) -> APIKey | None:
     """
     # Extract prefix for quick lookup
     try:
-        prefix = plain_key.split("_")[0] + "_" + plain_key.split("_")[1] + "_"
-    except IndexError:
+        prefix = extract_api_key_prefix(plain_key)
+    except ValueError:
         return None  # Malformed key
 
     # Compute lookup fragment and find all active keys matching prefix+lookup
     lookup = hash_api_key(plain_key)[:16]
+    # Temporal fallback: APIKey.key_lookup might be NULL for pre-migration keys.
+    # We include them by checking for None, leaving downstream hash check intact.
+    # Follow-up task: backfill key_lookup in a separate migration when
+    # a safe deterministic lookup can be computed.
     result = await db.execute(
         select(APIKey).where(
             APIKey.key_prefix == prefix,
-            APIKey.key_lookup == lookup,
             APIKey.is_active == True,  # noqa: E712
+            (APIKey.key_lookup == lookup) | APIKey.key_lookup.is_(None),
         )
     )
     candidates = result.scalars().all()
@@ -258,3 +262,23 @@ def has_scope(api_key: APIKey, required_scope: PermissionScope) -> bool:
         return True
 
     return required_scope.value in scopes
+
+
+def extract_api_key_prefix(plain_key: str) -> str:
+    """
+    Extract the prefix from a plain API key (e.g., 'mnm_live_').
+
+    Args:
+        plain_key: The plain API key
+
+    Returns:
+        The extracted prefix string
+
+    Raises:
+        ValueError: If the key format is malformed or invalid
+    """
+    parts = plain_key.split("_")
+    if len(parts) < 3:
+        raise ValueError("Malformed API key: expected at least two segments before the key payload")
+
+    return f"{parts[0]}_{parts[1]}_"

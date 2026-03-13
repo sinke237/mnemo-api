@@ -19,7 +19,7 @@ class TokenRequest(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "user_id": "usr_a1b2c3d4e5f6a7b",
+                "user_id": "usr_a1b2c3d4e5f6a7b8",
                 "api_key": (
                     "mnm_live_" "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
                 ),
@@ -38,7 +38,7 @@ class TokenResponse(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "access_token": "<jwt_token_placeholder>",
                 "expires_in": 3600,
                 "token_type": "Bearer",
             }

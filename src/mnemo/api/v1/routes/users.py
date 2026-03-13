@@ -60,16 +60,14 @@ async def create_user(
         msg = str(e)
         lowered = msg.lower()
 
-        if "country" in lowered or "unsupported country" in lowered:
-            error_code = ErrorCode.INVALID_COUNTRY_CODE
-        elif (
+        if (
             "timezone" in lowered
             or "missing timezone" in lowered
             or "multiple timezones" in lowered
         ):
-            # No specific timezone error codes exist in ErrorCode; use
-            # VALIDATION_ERROR to indicate an input validation problem.
-            error_code = ErrorCode.VALIDATION_ERROR
+            error_code = ErrorCode.INVALID_TIMEZONE
+        elif "country" in lowered or "unsupported country" in lowered:
+            error_code = ErrorCode.INVALID_COUNTRY_CODE
         else:
             error_code = ErrorCode.VALIDATION_ERROR
 
@@ -90,6 +88,7 @@ async def create_user(
     response_model=UserResponse,
     responses={
         401: {"model": ErrorResponse, "description": "Invalid or expired token"},
+        403: {"model": ErrorResponse, "description": "Forbidden"},
         404: {"model": ErrorResponse, "description": "User not found"},
     },
     summary="Get user profile",
@@ -148,6 +147,7 @@ async def get_user(
     responses={
         400: {"model": ErrorResponse, "description": "Invalid timezone"},
         401: {"model": ErrorResponse, "description": "Invalid or expired token"},
+        403: {"model": ErrorResponse, "description": "Forbidden"},
         404: {"model": ErrorResponse, "description": "User not found"},
     },
     summary="Update user profile",

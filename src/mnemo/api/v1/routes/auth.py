@@ -83,7 +83,7 @@ async def get_access_token(
             status_code=403,
             detail={
                 "error": {
-                    "code": ErrorCode.INSUFFICIENT_SCOPE.value,
+                    "code": ErrorCode.API_KEY_OWNER_MISMATCH.value,
                     "message": "API key does not belong to this user",
                     "status": 403,
                 }

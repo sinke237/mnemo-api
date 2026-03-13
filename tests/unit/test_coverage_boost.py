@@ -34,7 +34,10 @@ async def test_health_check_variants(monkeypatch):
 
 def test_settings_jwt_validator_and_env_props():
     # Validates is_production / is_development properties
-    s = Settings(app_env="production")
+    s = Settings(
+        app_env="production",
+        api_key_secret="1234567890123456789012345678901234567890",
+    )
     assert s.is_production
     assert not s.is_development
 

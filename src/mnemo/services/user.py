@@ -147,6 +147,12 @@ async def update_user(db: AsyncSession, user_id: str, user_data: UserUpdate) -> 
                 f"Cannot change timezone for country {user.country}; use country-derived timezone"
             )
 
+        allowed_tzs = get_timezones_for_country(user.country)
+        if allowed_tzs and user_data.timezone not in allowed_tzs:
+            raise ValueError(
+                f"Timezone {user_data.timezone} is not valid for country {user.country}"
+            )
+
         user.timezone = user_data.timezone
 
     if user_data.education_level is not None:

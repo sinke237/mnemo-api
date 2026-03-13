@@ -188,7 +188,7 @@ def get_timezones_for_country(country_code: str) -> list[str]:
     """
     code = country_code.upper()
     if code in MULTI_TIMEZONE_COUNTRIES:
-        return MULTI_TIMEZONE_COUNTRIES[code]
+        return list(MULTI_TIMEZONE_COUNTRIES[code])
 
     single_tz = get_timezone_for_country(code)
     return [single_tz] if single_tz else []

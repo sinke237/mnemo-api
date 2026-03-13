@@ -5,7 +5,7 @@ Uses pydantic-settings for validation and type coercion.
 
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -62,8 +62,12 @@ class Settings(BaseSettings):
 
     @field_validator("api_key_secret")
     @classmethod
-    def validate_api_key_secret(cls, v: str) -> str:
+    def validate_api_key_secret(cls, v: str, info: ValidationInfo) -> str:
         if v == "dev_apikey_secret_replace_in_production_with_64_char_hex":
+            if info.data.get("app_env", "development") != "development":
+                raise ValueError(
+                    "API_KEY_SECRET must be set to a secure value in non-development environments"
+                )
             return v  # allow in dev
         if len(v) < 32:
             raise ValueError("API_KEY_SECRET must be at least 32 characters")

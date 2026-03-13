@@ -19,7 +19,7 @@ class APIKey(Base):  # type: ignore[misc]
 
     SECURITY (per spec NFR-03.2):
     - API keys are NEVER stored in plaintext
-    - key_hash stores the bcrypt hash of the full key (mnm_live_xxx)
+    - key_hash stores the HMAC-SHA-256 digest of the full key (mnm_live_xxx)
     - The plain key is shown ONLY ONCE at creation time
     - key_prefix stores the prefix (mnm_live_ or mnm_test_) for identification
     """
@@ -38,7 +38,7 @@ class APIKey(Base):  # type: ignore[misc]
     # Key data (hashed per NFR-03.2)
     key_hash: Mapped[str] = mapped_column(
         String(128), nullable=False, unique=True, index=True
-    )  # bcrypt hash
+    )  # HMAC-SHA-256 digest of the full key
     key_prefix: Mapped[str] = mapped_column(
         String(20), nullable=False, index=True
     )  # mnm_live_ or mnm_test_
