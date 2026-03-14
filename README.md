@@ -14,7 +14,31 @@ Spaced repetition and active recall, delivered as a developer API.
 - Docker Desktop (for Postgres + Redis)
 - Git
 
-## Local Setup (under 5 minutes)
+## Quick Start (Recommended: Docker Compose)
+
+Docker Compose runs Postgres, Redis, applies migrations, **seeds dummy data using the service layer**, and starts the API.
+
+```bash
+docker compose up --build
+```
+
+Seed data is created on startup via `scripts/seed_dummy_data.py`. The script uses the codebase services
+to create **1 admin + 2 regular users**, decks, and cards, and writes the generated IDs and API keys to
+`dev_docs/seed_data.md`.
+
+Verify the API:
+```bash
+curl http://localhost:8000/v1/health
+# {"status":"ok","db":"ok","redis":"ok","version":"1.0.0"}
+```
+
+API docs: http://localhost:8000/docs
+
+---
+
+## Manual Run (each component separately)
+
+Use this if you want to control each service or debug locally.
 
 **1. Clone and enter the repo**
 ```bash
@@ -28,36 +52,45 @@ cp .env.example .env
 # The defaults work for local development — no changes needed to start
 ```
 
-**3. Start Postgres and Redis**
+**3. Start Postgres**
 ```bash
-docker compose up postgres redis -d
+docker compose up postgres -d
 ```
 
-**4. Create virtual environment and install dependencies**
+**4. Start Redis**
+```bash
+docker compose up redis -d
+```
+
+**5. Create virtual environment and install dependencies**
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-echo $VIRTUAL_ENV # check which venv you're in
+source venv/bin/activate  # On Windows: venv\\Scripts\\activate
 pip install -e ".[dev]"
 ```
 
-**5. Run database migrations**
+**6. Run database migrations**
 ```bash
 alembic upgrade head
 ```
 
-**6. Start the API**
+**7. Seed dummy data (via service layer)**
+```bash
+python -m scripts.seed_dummy_data
+```
+This creates 1 admin + 2 regular users and writes the generated IDs and API keys to
+`dev_docs/seed_data.md`.
+
+**8. Start the API**
 ```bash
 uvicorn mnemo.main:app --reload
 ```
 
-**7. Verify it's running**
+**9. Verify it's running**
 ```bash
 curl http://localhost:8000/v1/health
 # {"status":"ok","db":"ok","redis":"ok","version":"1.0.0"}
 ```
-
-API docs: http://localhost:8000/docs
 
 ---
 
@@ -125,51 +158,6 @@ alembic revision --autogenerate -m "description of change"
 # Roll back one migration
 alembic downgrade -1
 ```
-
----
-
-## Project Structure
-
-```
-mnemo-api/
-├── src/mnemo/
-│   ├── api/v1/
-│   │   ├── routes/        # Endpoint handlers (one file per resource)
-│   │   └── router.py      # Aggregates all v1 routes
-│   ├── core/
-│   │   └── config.py      # Settings loaded from environment
-│   ├── db/
-│   │   ├── database.py    # SQLAlchemy async engine + session
-│   │   └── redis.py       # Redis connection
-│   ├── models/            # SQLAlchemy ORM models (added per phase)
-│   ├── schemas/           # Pydantic request/response schemas
-│   ├── services/          # Business logic (no FastAPI dependencies)
-│   ├── workers/           # Background job handlers (CSV import, etc.)
-│   └── main.py            # FastAPI app, middleware, lifecycle
-├── tests/
-│   ├── unit/              # Fast tests, no external dependencies
-│   └── integration/       # Tests that require DB + Redis
-├── alembic/               # Database migrations
-├── scripts/               # Utility scripts
-├── docker-compose.yml
-├── Dockerfile
-└── pyproject.toml
-```
-
-## Build Phases
-
-| Phase | What Ships | Status |
-|-------|-----------|--------|
-| 0 | Repo, infrastructure, health check | ✅ Complete |
-| 1 | Authentication (API keys + JWT) | 🔜 Next |
-| 2 | User profiles + timezone resolution | ⏳ Planned |
-| 3 | Decks & Flashcards CRUD | ⏳ Planned |
-| 4 | CSV Import (async) | ⏳ Planned |
-| 5 | Spaced Repetition (SM-2) | ⏳ Planned |
-| 6 | Study Sessions | ⏳ Planned |
-| 7 | Progress & Analytics | ⏳ Planned |
-| 8 | Learning Plan Generator | ⏳ Planned |
-| 9 | Rate Limiting & Hardening | ⏳ Planned |
 
 ---
 
