@@ -37,7 +37,7 @@ def test_get_timezone_for_country_unknown_returns_none():
 def test_get_timezone_for_country_multi_tz_country_returns_primary():
     # Multi-timezone countries still return a stable primary
     result = get_timezone_for_country("US")
-    assert result is not None
+    assert result == "America/New_York"
 
 
 # ── country_has_multiple_timezones ─────────────────────────────────────────────

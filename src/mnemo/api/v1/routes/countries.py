@@ -75,7 +75,7 @@ class CountriesResponse(BaseModel):
                         ],
                     },
                 ],
-                "total": 60,
+                "total": len(get_all_supported_countries()),
             }
         }
     }

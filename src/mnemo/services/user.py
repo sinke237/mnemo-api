@@ -170,14 +170,14 @@ async def update_user(db: AsyncSession, user_id: str, user_data: UserUpdate) -> 
         user.locale = user_data.locale
 
     if user_data.timezone is not None:
-        normalized_timezone = normalize_and_precheck_timezone(user_data.timezone)
-
         # Only allow changing timezone for users in multi-timezone countries
         if not country_has_multiple_timezones(user.country):
             raise TimezoneNotAllowedError(
                 f"Cannot change timezone for country {user.country}; "
                 "use country-derived timezone"
             )
+
+        normalized_timezone = normalize_and_precheck_timezone(user_data.timezone)
 
         allowed_tzs: list[str] = get_timezones_for_country(user.country)
         if not allowed_tzs:

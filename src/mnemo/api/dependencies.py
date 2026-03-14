@@ -10,7 +10,7 @@ Module uses module-level dependency singletons to avoid ruff B008.
 """
 
 from collections.abc import Callable, Coroutine
-from typing import Any, cast
+from typing import Any
 
 from fastapi import Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -137,7 +137,18 @@ async def get_current_user_from_token(
     # Attach token scopes to the returned user instance so downstream
     # dependencies and route handlers can rely on scopes without re-parsing
     # the raw token.
-    scopes = cast(list[str], payload.get("scopes", []))
+    scopes = payload.get("scopes", [])
+    if not isinstance(scopes, list) or not all(isinstance(scope, str) for scope in scopes):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": {
+                    "code": ErrorCode.INVALID_TOKEN.value,
+                    "message": "Invalid token scopes",
+                    "status": 401,
+                }
+            },
+        )
 
     # Attach a transient attribute to the SQLAlchemy model instance.
     # Direct attribute assignment is fine on ORM instances for transient data.

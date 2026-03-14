@@ -21,20 +21,20 @@ if settings.database_url.startswith("sqlite"):
         # Use StaticPool for in-memory SQLite so tables persist across connections.
         engine = create_async_engine(
             settings.database_url,
-            echo=settings.is_development(),
+            echo=settings.is_development,
             connect_args=connect_args,
             poolclass=StaticPool,
         )
     else:
         engine = create_async_engine(
             settings.database_url,
-            echo=settings.is_development(),
+            echo=settings.is_development,
             connect_args=connect_args,
         )
 else:
     engine = create_async_engine(
         settings.database_url,
-        echo=settings.is_development(),  # log SQL in dev only
+        echo=settings.is_development,  # log SQL in dev only
         pool_size=10,
         max_overflow=20,
         pool_pre_ping=True,  # verify connections before use

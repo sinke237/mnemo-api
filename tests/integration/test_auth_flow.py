@@ -322,9 +322,13 @@ async def test_multi_timezone_country_requires_timezone(
 
 
 @pytest.mark.asyncio
-async def test_update_profile_own_user_only(regular_user_with_key: tuple[User, str]) -> None:
+async def test_update_profile_own_user_only(
+    regular_user_with_key: tuple[User, str],
+    admin_user_with_key: tuple[User, str],
+) -> None:
     """Test that users can only update their own profile."""
     user, user_key = regular_user_with_key
+    other_user, _ = admin_user_with_key
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # Get JWT token
@@ -337,9 +341,9 @@ async def test_update_profile_own_user_only(regular_user_with_key: tuple[User, s
         assert "access_token" in token_data
         jwt_token = token_data["access_token"]
 
-        # Try to update another user's profile (fake user ID)
+        # Try to update another user's profile (real user ID)
         response = await client.patch(
-            "/v1/users/usr_someotheruserid",
+            f"/v1/users/{other_user.id}",
             headers={"Authorization": f"Bearer {jwt_token}"},
             json={"daily_goal_cards": 50},
         )
