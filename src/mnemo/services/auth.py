@@ -7,7 +7,8 @@ Per spec section 02: Authentication.
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
-from jose import JWTError, jwt
+from jose import jwt
+from jose.exceptions import ExpiredSignatureError, JWTError
 
 from mnemo.core.config import get_settings
 from mnemo.core.constants import PermissionScope
@@ -67,6 +68,24 @@ def decode_access_token(token: str) -> dict[str, Any] | None:
         return payload
     except JWTError:
         return None
+
+
+def decode_access_token_with_error(token: str) -> tuple[dict[str, Any] | None, str | None]:
+    """
+    Decode a JWT access token and distinguish invalid vs expired tokens.
+
+    Returns:
+        (payload, error) where error is "expired", "invalid", or None.
+    """
+    try:
+        payload: dict[str, Any] = jwt.decode(
+            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+        )
+        return payload, None
+    except ExpiredSignatureError:
+        return None, "expired"
+    except JWTError:
+        return None, "invalid"
 
 
 def get_token_user_id(token: str) -> str | None:

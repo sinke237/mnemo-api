@@ -18,6 +18,11 @@ def test_get_timezone_for_country_known_single():
     assert get_timezone_for_country("GB") == "Europe/London"
 
 
+def test_get_timezone_for_country_cm_ng():
+    assert get_timezone_for_country("CM") == "Africa/Douala"
+    assert get_timezone_for_country("NG") == "Africa/Lagos"
+
+
 def test_get_timezone_for_country_case_insensitive():
     result_upper = get_timezone_for_country("DE")
     result_lower = get_timezone_for_country("de")
@@ -30,9 +35,9 @@ def test_get_timezone_for_country_unknown_returns_none():
 
 
 def test_get_timezone_for_country_multi_tz_country_returns_primary():
-    # US is in MULTI_TIMEZONE_COUNTRIES but also has a primary entry
+    # Multi-timezone countries still return a stable primary
     result = get_timezone_for_country("US")
-    assert result is not None
+    assert result == "America/New_York"
 
 
 # ── country_has_multiple_timezones ─────────────────────────────────────────────
@@ -46,7 +51,7 @@ def test_country_has_multiple_timezones_true():
 
 def test_country_has_multiple_timezones_false():
     assert country_has_multiple_timezones("GB") is False
-    assert country_has_multiple_timezones("DE") is False
+    assert country_has_multiple_timezones("CM") is False
     assert country_has_multiple_timezones("JP") is False
 
 
@@ -70,6 +75,13 @@ def test_get_timezones_for_country_single_tz():
     assert isinstance(timezones, list)
     assert len(timezones) == 1
     assert timezones[0] == "Europe/London"
+
+
+def test_get_timezones_for_country_ru_multi_tz():
+    timezones = get_timezones_for_country("RU")
+    assert isinstance(timezones, list)
+    assert len(timezones) > 1
+    assert "Europe/Moscow" in timezones
 
 
 def test_get_timezones_for_country_unknown():

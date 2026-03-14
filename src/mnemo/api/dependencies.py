@@ -10,7 +10,7 @@ Module uses module-level dependency singletons to avoid ruff B008.
 """
 
 from collections.abc import Callable, Coroutine
-from typing import Any, cast
+from typing import Any
 
 from fastapi import Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -92,14 +92,17 @@ async def get_current_user_from_token(
 
     token = credentials.credentials
 
-    payload = auth_service.decode_access_token(token)
+    payload, token_error = auth_service.decode_access_token_with_error(token)
     if payload is None:
+        is_expired = token_error == "expired"  # noqa: S105
+        error_code = ErrorCode.TOKEN_EXPIRED.value if is_expired else ErrorCode.INVALID_TOKEN.value
+        message = "Token expired" if is_expired else "Invalid token"
         raise HTTPException(
             status_code=401,
             detail={
                 "error": {
-                    "code": ErrorCode.TOKEN_EXPIRED.value,
-                    "message": "Invalid or expired token",
+                    "code": error_code,
+                    "message": message,
                     "status": 401,
                 }
             },
@@ -111,7 +114,7 @@ async def get_current_user_from_token(
             status_code=401,
             detail={
                 "error": {
-                    "code": ErrorCode.TOKEN_EXPIRED.value,
+                    "code": ErrorCode.INVALID_TOKEN.value,
                     "message": "Malformed token (missing subject)",
                     "status": 401,
                 }
@@ -134,10 +137,18 @@ async def get_current_user_from_token(
     # Attach token scopes to the returned user instance so downstream
     # dependencies and route handlers can rely on scopes without re-parsing
     # the raw token.
-    try:
-        scopes = cast(list[str], payload.get("scopes", []))
-    except Exception:
-        scopes = []
+    scopes = payload.get("scopes", [])
+    if not isinstance(scopes, list) or not all(isinstance(scope, str) for scope in scopes):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": {
+                    "code": ErrorCode.INVALID_TOKEN.value,
+                    "message": "Invalid token scopes",
+                    "status": 401,
+                }
+            },
+        )
 
     # Attach a transient attribute to the SQLAlchemy model instance.
     # Direct attribute assignment is fine on ORM instances for transient data.

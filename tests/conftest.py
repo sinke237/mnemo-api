@@ -1,21 +1,4 @@
-"""
-Shared pytest fixtures for all tests.
-"""
+import tests.setup_env  # noqa: E402, F401
 
-import pytest
-from httpx import ASGITransport, AsyncClient
-
-from mnemo.main import app
-
-
-@pytest.fixture
-async def client() -> AsyncClient:
-    """
-    Async HTTP client pointed at the FastAPI app.
-    Does NOT require a running server — uses ASGI transport directly.
-    """
-    async with AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    ) as ac:
-        yield ac
+# Register shared fixtures (including autouse session DB setup).
+pytest_plugins = ["tests.test_fixtures"]
