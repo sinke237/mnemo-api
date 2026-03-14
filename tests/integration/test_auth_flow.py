@@ -141,9 +141,11 @@ async def test_full_auth_flow_admin_user(admin_user_with_key: tuple[User, str]) 
         assert profile_data["country"] == "CM"
         assert profile_data["timezone"] == "Africa/Douala"
         assert "local_time" in profile_data
+        assert "created_at_local" in profile_data
         created_at = _parse_iso_datetime(profile_data["created_at"])
         expected_local_time = to_local_time(created_at, profile_data["timezone"])
         assert profile_data["local_time"] == expected_local_time
+        assert profile_data["created_at_local"] == expected_local_time
 
         # Step 3: Update profile
         update_response = await client.patch(
