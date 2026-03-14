@@ -33,6 +33,10 @@ def _parse_iso_datetime(value: str) -> datetime:
 async def db_session() -> AsyncSession:
     """Provide a database session for tests."""
     async with AsyncSessionLocal() as session:
+        # Cleanup before each test
+        await session.execute(delete(APIKey))
+        await session.execute(delete(User))
+        await session.commit()
         yield session
         # Cleanup: delete all test data after each test
         await session.execute(delete(APIKey))

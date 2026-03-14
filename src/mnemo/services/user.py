@@ -71,13 +71,12 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
             InvalidTimezoneError: If timezone is invalid or doesn't match country
             MissingTimezoneError: If timezone required but not provided
         """
+        tz_list: list[str] = get_timezones_for_country(user_data.country)
+        if not tz_list:
+            raise InvalidCountryCodeError(f"Unsupported country code: {user_data.country}")
+
         if user_data.timezone is not None:
             normalized_timezone = normalize_and_precheck_timezone(user_data.timezone)
-
-            tz_list: list[str] = get_timezones_for_country(user_data.country)
-            if not tz_list:
-                raise InvalidCountryCodeError(f"Unsupported country code: {user_data.country}")
-
             if country_has_multiple_timezones(user_data.country):
                 if normalized_timezone not in tz_list:
                     raise InvalidTimezoneError(
@@ -96,12 +95,8 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
                     f"Country {user_data.country} has multiple timezones. "
                     "User must select specific timezone."
                 )
-            else:
-                # Set timezone for single-timezone countries
-                tz_list = get_timezones_for_country(user_data.country)
-                if not tz_list:
-                    raise InvalidCountryCodeError(f"Unsupported country code: {user_data.country}")
-                return tz_list[0]
+            # Set timezone for single-timezone countries
+            return tz_list[0]
 
     # Resolve timezone and validate country
     resolved_timezone = resolve_timezone(user_data)
