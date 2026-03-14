@@ -39,6 +39,7 @@ services:
       dockerfile: Dockerfile
     container_name: mnemo_api
     restart: unless-stopped
+    user: "${UID:-1000}:${GID:-1000}"
     env_file:
       - .env
     environment:
@@ -48,7 +49,9 @@ services:
       - "8000:8000"
     volumes:
       - ./src:/app/src
+      - ./scripts:/app/scripts
       - ./alembic:/app/alembic
+      - ./dev_docs:/app/dev_docs
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,7 +59,10 @@ services:
         condition: service_healthy
     # Invoke uvicorn via the python module so it works with the image build
     # approach that installs packages into site-packages without console scripts
-    command: python -m uvicorn mnemo.main:app --host 0.0.0.0 --port 8000 --reload
+    command: >
+      sh -c "python -m alembic upgrade head &&
+      python -m scripts.seed_dummy_data &&
+      python -m uvicorn mnemo.main:app --host 0.0.0.0 --port 8000 --reload"
 
 volumes:
   postgres_data:

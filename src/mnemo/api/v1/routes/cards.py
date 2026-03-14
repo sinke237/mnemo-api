@@ -4,11 +4,14 @@ Implements flashcard CRUD.
 Per spec section 07: Flashcards.
 """
 
+from typing import cast
+
 from fastapi import APIRouter, Depends, Header, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.api.dependencies import get_current_user_from_token, require_user_scope
+from mnemo.api.utils import _error_response
 from mnemo.core.constants import DEFAULT_DIFFICULTY, ErrorCode, PermissionScope
 from mnemo.core.exceptions import CardNotFoundError, DeckNotFoundError
 from mnemo.db.database import get_db
@@ -27,19 +30,6 @@ router = APIRouter(prefix="", tags=["cards"])
 # module-level Depends singletons to satisfy ruff B008
 _db_dep = Depends(get_db)
 _current_user_dep = Depends(get_current_user_from_token)
-
-
-def _error_response(code: ErrorCode, message: str, status_code: int) -> JSONResponse:
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "error": {
-                "code": code.value,
-                "message": message,
-                "status": status_code,
-            }
-        },
-    )
 
 
 @router.post(
@@ -147,6 +137,7 @@ async def replace_card(
             question=card_data.question,
             answer=card_data.answer,
             source_ref=card_data.source_ref,
+            source_ref_set=True,
             tags=card_data.tags,
             difficulty=card_data.difficulty,
         )
@@ -183,6 +174,7 @@ async def update_card(
             question=card_data.question,
             answer=card_data.answer,
             source_ref=card_data.source_ref,
+            source_ref_set="source_ref" in card_data.model_fields_set,
             tags=card_data.tags,
             difficulty=card_data.difficulty,
         )
@@ -196,7 +188,8 @@ async def update_card(
 
 @router.delete(
     "/cards/{card_id}",
-    status_code=204,
+    status_code=200,
+    response_model=None,
     dependencies=[Depends(require_user_scope(PermissionScope.DECKS_WRITE))],
     responses={
         401: {"model": ErrorResponse},
@@ -213,8 +206,11 @@ async def delete_card(
     try:
         await flashcard_service.delete_card(db, current_user.id, card_id)
     except CardNotFoundError:
-        return _error_response(ErrorCode.CARD_NOT_FOUND, f"No card found with ID {card_id}.", 404)
+        return cast(
+            Response,
+            _error_response(ErrorCode.CARD_NOT_FOUND, f"No card found with ID {card_id}.", 404),
+        )
     except DeckNotFoundError as exc:
-        return _error_response(ErrorCode.DECK_NOT_FOUND, str(exc), 404)
+        return cast(Response, _error_response(ErrorCode.DECK_NOT_FOUND, str(exc), 404))
 
-    return Response(status_code=204)
+    return Response(status_code=200)

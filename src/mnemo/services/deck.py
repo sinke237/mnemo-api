@@ -7,9 +7,8 @@ Per spec section 06 and FR-02.*.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import ceil
 
-from sqlalchemy import String, cast, delete, func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
@@ -19,17 +18,8 @@ from mnemo.core.exceptions import DeckNameConflictError, DeckNotFoundError
 from mnemo.models.card_memory_state import CardMemoryState
 from mnemo.models.deck import Deck
 from mnemo.models.flashcard import Flashcard
+from mnemo.services.utils import pagination_meta
 from mnemo.utils.id_generator import generate_deck_id
-
-
-def _pagination_meta(page: int, per_page: int, total: int) -> dict[str, int]:
-    total_pages = ceil(total / per_page) if per_page else 0
-    return {
-        "page": page,
-        "per_page": per_page,
-        "total": total,
-        "total_pages": total_pages,
-    }
 
 
 async def _deck_name_exists(
@@ -92,7 +82,7 @@ async def list_decks(
 
     filters: list[ColumnElement[bool]] = [Deck.user_id == user_id]
     if tag:
-        filters.append(func.lower(cast(Deck.tags, String)).like(f'%"{tag.lower()}"%'))
+        filters.append(Deck.tags.contains([tag]))
 
     sort_map = {
         "name": Deck.name,
@@ -116,7 +106,7 @@ async def list_decks(
     result = await db.execute(stmt)
     decks = result.scalars().all()
 
-    return decks, _pagination_meta(page, per_page, total)
+    return decks, pagination_meta(page, per_page, total)
 
 
 async def update_deck(

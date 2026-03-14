@@ -4,12 +4,15 @@ Implements deck CRUD and deck card listing.
 Per spec section 06: Decks.
 """
 
-from fastapi import APIRouter, Depends, Header, Response
+from typing import Literal, cast
+
+from fastapi import APIRouter, Depends, Header, Query, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.api.dependencies import get_current_user_from_token, require_user_scope
-from mnemo.core.constants import ErrorCode, PermissionScope
+from mnemo.api.utils import _error_response
+from mnemo.core.constants import MAX_PAGE_SIZE, ErrorCode, PermissionScope
 from mnemo.core.exceptions import DeckNameConflictError, DeckNotFoundError
 from mnemo.db.database import get_db
 from mnemo.models.user import User
@@ -33,31 +36,19 @@ _db_dep = Depends(get_db)
 _current_user_dep = Depends(get_current_user_from_token)
 
 
-def _error_response(code: ErrorCode, message: str, status_code: int) -> JSONResponse:
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "error": {
-                "code": code.value,
-                "message": message,
-                "status": status_code,
-            }
-        },
-    )
-
-
 @router.get(
     "",
     dependencies=[Depends(require_user_scope(PermissionScope.DECKS_READ))],
+    response_model=DeckListResponse,
     responses={401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}},
     summary="List decks",
 )
 async def list_decks(
-    page: int = 1,
-    per_page: int = 20,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=MAX_PAGE_SIZE),
     tag: str | None = None,
-    sort: str = "created_at",
-    order: str = "desc",
+    sort: Literal["created_at", "updated_at", "name"] = "created_at",
+    order: Literal["asc", "desc"] = "desc",
     current_user: User = _current_user_dep,
     db: AsyncSession = _db_dep,
 ) -> DeckListResponse:
@@ -79,6 +70,7 @@ async def list_decks(
 @router.post(
     "",
     status_code=201,
+    response_model=DeckResponse,
     dependencies=[Depends(require_user_scope(PermissionScope.DECKS_WRITE))],
     responses={
         401: {"model": ErrorResponse},
@@ -92,7 +84,7 @@ async def create_deck(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     current_user: User = _current_user_dep,
     db: AsyncSession = _db_dep,
-) -> DeckResponse:
+) -> DeckResponse | JSONResponse:
     endpoint = "POST /v1/decks"
     if idempotency_key:
         record = await idempotency_service.get_idempotency_record(
@@ -129,6 +121,7 @@ async def create_deck(
 
 @router.get(
     "/{deck_id}",
+    response_model=DeckResponse,
     dependencies=[Depends(require_user_scope(PermissionScope.DECKS_READ))],
     responses={
         401: {"model": ErrorResponse},
@@ -141,7 +134,7 @@ async def get_deck(
     deck_id: str,
     current_user: User = _current_user_dep,
     db: AsyncSession = _db_dep,
-) -> DeckResponse:
+) -> DeckResponse | JSONResponse:
     deck = await deck_service.get_deck_by_id(db, current_user.id, deck_id)
     if deck is None:
         return _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404)
@@ -150,6 +143,7 @@ async def get_deck(
 
 @router.put(
     "/{deck_id}",
+    response_model=DeckResponse,
     dependencies=[Depends(require_user_scope(PermissionScope.DECKS_WRITE))],
     responses={
         401: {"model": ErrorResponse},
@@ -164,7 +158,7 @@ async def replace_deck(
     deck_data: DeckReplace,
     current_user: User = _current_user_dep,
     db: AsyncSession = _db_dep,
-) -> DeckResponse:
+) -> DeckResponse | JSONResponse:
     try:
         deck = await deck_service.update_deck(
             db,
@@ -184,6 +178,7 @@ async def replace_deck(
 
 @router.patch(
     "/{deck_id}",
+    response_model=DeckResponse,
     dependencies=[Depends(require_user_scope(PermissionScope.DECKS_WRITE))],
     responses={
         401: {"model": ErrorResponse},
@@ -198,7 +193,7 @@ async def update_deck(
     deck_data: DeckUpdate,
     current_user: User = _current_user_dep,
     db: AsyncSession = _db_dep,
-) -> DeckResponse:
+) -> DeckResponse | JSONResponse:
     try:
         deck = await deck_service.update_deck(
             db,
@@ -218,7 +213,8 @@ async def update_deck(
 
 @router.delete(
     "/{deck_id}",
-    status_code=204,
+    status_code=200,
+    response_model=None,
     dependencies=[Depends(require_user_scope(PermissionScope.DECKS_WRITE))],
     responses={
         401: {"model": ErrorResponse},
@@ -231,16 +227,20 @@ async def delete_deck(
     deck_id: str,
     current_user: User = _current_user_dep,
     db: AsyncSession = _db_dep,
-) -> Response:
+) -> Response | JSONResponse:
     try:
         await deck_service.delete_deck(db, current_user.id, deck_id)
     except DeckNotFoundError:
-        return _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404)
-    return Response(status_code=204)
+        return cast(
+            Response,
+            _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404),
+        )
+    return Response(status_code=200)
 
 
 @router.get(
     "/{deck_id}/cards",
+    response_model=FlashcardListResponse,
     dependencies=[Depends(require_user_scope(PermissionScope.DECKS_READ))],
     responses={
         401: {"model": ErrorResponse},
@@ -251,11 +251,11 @@ async def delete_deck(
 )
 async def list_cards_for_deck(
     deck_id: str,
-    page: int = 1,
-    per_page: int = 20,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=MAX_PAGE_SIZE),
     current_user: User = _current_user_dep,
     db: AsyncSession = _db_dep,
-) -> FlashcardListResponse:
+) -> FlashcardListResponse | JSONResponse:
     try:
         cards, pagination = await flashcard_service.list_cards_for_deck(
             db,

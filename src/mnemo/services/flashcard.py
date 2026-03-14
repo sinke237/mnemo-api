@@ -7,28 +7,17 @@ Per spec section 07 and FR-02.*.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import ceil
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import Select
 
 from mnemo.core.constants import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from mnemo.core.exceptions import CardNotFoundError, DeckNotFoundError
 from mnemo.models.card_memory_state import CardMemoryState
 from mnemo.models.deck import Deck
 from mnemo.models.flashcard import Flashcard
+from mnemo.services.utils import pagination_meta
 from mnemo.utils.id_generator import generate_card_id
-
-
-def _pagination_meta(page: int, per_page: int, total: int) -> dict[str, int]:
-    total_pages = ceil(total / per_page) if per_page else 0
-    return {
-        "page": page,
-        "per_page": per_page,
-        "total": total,
-        "total_pages": total_pages,
-    }
 
 
 async def _get_deck(db: AsyncSession, user_id: str, deck_id: str) -> Deck | None:
@@ -98,7 +87,7 @@ async def list_cards_for_deck(
     total = await db.scalar(count_stmt)
     total = int(total or 0)
 
-    stmt: Select[Flashcard] = (
+    stmt = (
         select(Flashcard)
         .where(Flashcard.deck_id == deck_id)
         .order_by(Flashcard.created_at.desc())
@@ -108,7 +97,7 @@ async def list_cards_for_deck(
     result = await db.execute(stmt)
     cards = result.scalars().all()
 
-    return cards, _pagination_meta(page, per_page, total)
+    return cards, pagination_meta(page, per_page, total)
 
 
 async def update_card(
@@ -119,6 +108,7 @@ async def update_card(
     question: str | None = None,
     answer: str | None = None,
     source_ref: str | None = None,
+    source_ref_set: bool = False,
     tags: list[str] | None = None,
     difficulty: int | None = None,
 ) -> Flashcard:
@@ -140,7 +130,7 @@ async def update_card(
         card.answer = answer
         changed = True
 
-    if source_ref is not None and source_ref != card.source_ref:
+    if source_ref_set and source_ref != card.source_ref:
         card.source_ref = source_ref
         changed = True
 

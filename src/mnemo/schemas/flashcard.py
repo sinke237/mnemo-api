@@ -55,6 +55,8 @@ class FlashcardReplace(FlashcardBase):
 
     question: str = Field(..., min_length=1, max_length=MAX_QUESTION_LENGTH)
     answer: str = Field(..., min_length=1, max_length=MAX_ANSWER_LENGTH)
+    tags: list[str] = Field(default_factory=list)
+    difficulty: int = Field(default=DEFAULT_DIFFICULTY, ge=MIN_DIFFICULTY, le=MAX_DIFFICULTY)
 
 
 class FlashcardUpdate(FlashcardBase):

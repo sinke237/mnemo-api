@@ -9,7 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mnemo.core.constants import PermissionScope
+from mnemo.core.constants import DEFAULT_DIFFICULTY, PermissionScope
 from mnemo.db.database import AsyncSessionLocal
 from mnemo.models.card_memory_state import CardMemoryState
 from mnemo.models.deck import Deck
@@ -116,7 +116,7 @@ async def test_deck_card_crud_flow(client: AsyncClient, user_token: tuple[User, 
         f"/v1/cards/{card_ids[1]}",
         headers=headers,
     )
-    assert delete_card.status_code == 204
+    assert delete_card.status_code == 200
 
     # Verify card_count is correct
     deck_resp = await client.get(f"/v1/decks/{deck_id}", headers=headers)
@@ -170,7 +170,7 @@ async def test_cascade_delete_deck_cards_memory_state(
     await db_session.commit()
 
     delete_resp = await client.delete(f"/v1/decks/{deck_id}", headers=headers)
-    assert delete_resp.status_code == 204
+    assert delete_resp.status_code == 200
 
     db_session.expire_all()
 
@@ -209,6 +209,41 @@ async def test_pagination_shape(client: AsyncClient, user_token: tuple[User, str
     assert data["pagination"]["total"] == 3
     assert data["pagination"]["total_pages"] == 2
     assert len(data["data"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_put_flashcard_defaults_and_clear_source_ref(
+    client: AsyncClient, user_token: tuple[User, str]
+) -> None:
+    _, token = user_token
+    headers = {"Authorization": f"Bearer {token}"}
+
+    deck_resp = await client.post("/v1/decks", json={"name": "Replace Defaults"}, headers=headers)
+    deck_id = deck_resp.json()["id"]
+
+    card_resp = await client.post(
+        f"/v1/decks/{deck_id}/cards",
+        json={
+            "question": "Initial?",
+            "answer": "Initial",
+            "source_ref": "ref-1",
+            "tags": ["t1"],
+            "difficulty": 4,
+        },
+        headers=headers,
+    )
+    card_id = card_resp.json()["id"]
+
+    replace_resp = await client.put(
+        f"/v1/cards/{card_id}",
+        json={"question": "Updated?", "answer": "Updated"},
+        headers=headers,
+    )
+    assert replace_resp.status_code == 200
+    replaced = replace_resp.json()
+    assert replaced["tags"] == []
+    assert replaced["difficulty"] == DEFAULT_DIFFICULTY
+    assert replaced["source_ref"] is None
 
 
 @pytest.mark.asyncio
