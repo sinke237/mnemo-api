@@ -4,6 +4,7 @@ Request/response models per spec section 11: User Profiles.
 """
 
 from datetime import datetime
+from typing import cast
 
 from pydantic import BaseModel, Field, computed_field, field_validator
 
@@ -109,6 +110,11 @@ class UserResponse(BaseModel):
         local_time_value: str = to_local_time(self.created_at, self.timezone)
         return local_time_value
 
+    @computed_field(return_type=str)
+    def created_at_local(self) -> str:
+        """Account creation time as a local-time companion field."""
+        return cast(str, self.local_time)
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -122,6 +128,7 @@ class UserResponse(BaseModel):
                 "daily_goal_cards": 25,
                 "created_at": "2026-03-10T08:30:00Z",
                 "local_time": "2026-03-10T09:30:00+01:00",
+                "created_at_local": "2026-03-10T09:30:00+01:00",
             }
         },
         "from_attributes": True,
