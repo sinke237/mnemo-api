@@ -92,14 +92,17 @@ async def get_current_user_from_token(
 
     token = credentials.credentials
 
-    payload = auth_service.decode_access_token(token)
+    payload, token_error = auth_service.decode_access_token_with_error(token)
     if payload is None:
+        is_expired = token_error == "expired"  # noqa: S105
+        error_code = ErrorCode.TOKEN_EXPIRED.value if is_expired else ErrorCode.INVALID_TOKEN.value
+        message = "Token expired" if is_expired else "Invalid token"
         raise HTTPException(
             status_code=401,
             detail={
                 "error": {
-                    "code": ErrorCode.TOKEN_EXPIRED.value,
-                    "message": "Invalid or expired token",
+                    "code": error_code,
+                    "message": message,
                     "status": 401,
                 }
             },
@@ -111,7 +114,7 @@ async def get_current_user_from_token(
             status_code=401,
             detail={
                 "error": {
-                    "code": ErrorCode.TOKEN_EXPIRED.value,
+                    "code": ErrorCode.INVALID_TOKEN.value,
                     "message": "Malformed token (missing subject)",
                     "status": 401,
                 }

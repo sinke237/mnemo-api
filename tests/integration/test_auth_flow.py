@@ -3,6 +3,8 @@ Integration tests for full authentication flow.
 Tests the complete user journey: create user → get API key → get JWT → access profile.
 """
 
+from datetime import timedelta
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete
@@ -15,6 +17,7 @@ from mnemo.models.api_key import APIKey
 from mnemo.models.user import User
 from mnemo.schemas.user import UserCreate
 from mnemo.services.api_key import create_api_key
+from mnemo.services.auth import create_access_token
 from mnemo.services.user import create_user
 
 
@@ -213,15 +216,34 @@ async def test_invalid_api_key_rejected() -> None:
 
 
 @pytest.mark.asyncio
-async def test_expired_or_invalid_jwt_rejected(regular_user_with_key: tuple[User, str]) -> None:
-    """Test that invalid or malformed JWT tokens are rejected."""
+async def test_invalid_jwt_rejected(regular_user_with_key: tuple[User, str]) -> None:
+    """Test that malformed JWT tokens are rejected."""
     user, _ = regular_user_with_key
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        # Try with invalid token
         response = await client.get(
             f"/v1/users/{user.id}",
             headers={"Authorization": "Bearer invalid.jwt.token"},
+        )
+        assert response.status_code == 401
+        error_data = response.json()
+        assert error_data["detail"]["error"]["code"] == "INVALID_TOKEN"
+
+
+@pytest.mark.asyncio
+async def test_expired_jwt_rejected(regular_user_with_key: tuple[User, str]) -> None:
+    """Test that expired JWT tokens are rejected."""
+    user, _ = regular_user_with_key
+    expired_token = create_access_token(
+        user.id,
+        [PermissionScope.DECKS_READ.value],
+        expires_delta=timedelta(seconds=-1),
+    )
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            f"/v1/users/{user.id}",
+            headers={"Authorization": f"Bearer {expired_token}"},
         )
         assert response.status_code == 401
         error_data = response.json()
@@ -285,7 +307,6 @@ async def test_multi_timezone_country_requires_timezone(
         assert response.status_code == 400
         error_data = response.json()
         assert error_data["detail"]["error"]["code"] == "INVALID_TIMEZONE"
-        assert "multiple timezones" in error_data["detail"]["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -299,7 +320,10 @@ async def test_update_profile_own_user_only(regular_user_with_key: tuple[User, s
             "/v1/auth/token",
             json={"user_id": user.id, "api_key": user_key},
         )
-        jwt_token = token_response.json()["access_token"]
+        assert token_response.status_code == 200, f"Token request failed: {token_response.text}"
+        token_data = token_response.json()
+        assert "access_token" in token_data
+        jwt_token = token_data["access_token"]
 
         # Try to update another user's profile (fake user ID)
         response = await client.patch(

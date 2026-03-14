@@ -76,13 +76,13 @@ black src/ tests/
 ruff check src/ tests/
 
 # 4. Type check
-mypy src/mnemo/ --exclude src/mnemo/db/redis.py
+mypy src/mnemo/
 
 # 5. Run tests with coverage (fails if coverage is below 70%)
 pytest tests/ -v
 
-# 6. Check coverage
-pytest --cov=src/mnemo --cov-report=term-missing
+# 6. Check coverage (report only)
+coverage report --show-missing
 ```
 
 ---

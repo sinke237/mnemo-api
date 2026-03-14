@@ -16,13 +16,21 @@ settings = get_settings()
 
 
 if settings.database_url.startswith("sqlite"):
-    # Use StaticPool and disable thread check for SQLite (esp. in-memory)
-    engine = create_async_engine(
-        settings.database_url,
-        echo=settings.is_development,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    connect_args = {"check_same_thread": False}
+    if ":memory:" in settings.database_url:
+        # Use StaticPool for in-memory SQLite so tables persist across connections.
+        engine = create_async_engine(
+            settings.database_url,
+            echo=settings.is_development,
+            connect_args=connect_args,
+            poolclass=StaticPool,
+        )
+    else:
+        engine = create_async_engine(
+            settings.database_url,
+            echo=settings.is_development,
+            connect_args=connect_args,
+        )
 else:
     engine = create_async_engine(
         settings.database_url,

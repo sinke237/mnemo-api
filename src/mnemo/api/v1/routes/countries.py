@@ -6,6 +6,7 @@ Returns supported countries and timezone information.
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from mnemo.schemas.error import ErrorResponse
 from mnemo.utils.timezone import (
     COUNTRY_TO_TIMEZONE,
     MULTI_TIMEZONE_COUNTRIES,
@@ -127,7 +128,7 @@ async def get_countries() -> CountriesResponse:
         "and get the list of available timezones."
     ),
     responses={
-        404: {"description": "Country code not supported"},
+        404: {"model": ErrorResponse, "description": "Country code not supported"},
     },
 )
 async def get_country(country_code: str) -> CountryInfo:

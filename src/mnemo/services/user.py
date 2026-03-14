@@ -23,6 +23,20 @@ from mnemo.utils.timezone import (
 )
 
 
+def normalize_and_precheck_timezone(timezone: str) -> str:
+    """
+    Normalize and pre-validate a timezone string.
+
+    Raises InvalidTimezoneError for blank/whitespace or invalid IANA identifiers.
+    """
+    normalized = timezone.strip()
+    if not normalized:
+        raise InvalidTimezoneError("Timezone cannot be blank or whitespace-only")
+    if not validate_timezone(normalized):
+        raise InvalidTimezoneError(f"Invalid timezone: {normalized}")
+    return normalized
+
+
 async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
     """
     Create a new user account.
@@ -58,12 +72,7 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
             MissingTimezoneError: If timezone required but not provided
         """
         if user_data.timezone is not None:
-            user_data.timezone = user_data.timezone.strip()
-            if not user_data.timezone:
-                raise InvalidTimezoneError("Timezone cannot be blank or whitespace-only")
-
-            if not validate_timezone(user_data.timezone):
-                raise InvalidTimezoneError(f"Invalid timezone: {user_data.timezone}")
+            user_data.timezone = normalize_and_precheck_timezone(user_data.timezone)
 
             tz_list = get_timezones_for_country(user_data.country)
             if not tz_list:
@@ -160,13 +169,7 @@ async def update_user(db: AsyncSession, user_id: str, user_data: UserUpdate) -> 
         user.locale = user_data.locale
 
     if user_data.timezone is not None:
-        user_data.timezone = user_data.timezone.strip()
-        if not user_data.timezone:
-            raise InvalidTimezoneError("Timezone cannot be blank or whitespace-only")
-
-        # Validate timezone before updating
-        if not validate_timezone(user_data.timezone):
-            raise InvalidTimezoneError(f"Invalid timezone: {user_data.timezone}")
+        user_data.timezone = normalize_and_precheck_timezone(user_data.timezone)
 
         # Only allow changing timezone for users in multi-timezone countries
         if not country_has_multiple_timezones(user.country):
