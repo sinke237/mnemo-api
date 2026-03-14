@@ -47,6 +47,34 @@ async def test_create_user_invalid_country_raises_error(db_session: AsyncSession
 
 
 @pytest.mark.asyncio
+async def test_create_user_derives_timezone_cm(db_session: AsyncSession) -> None:
+    """Test that CM derives Africa/Douala when timezone is omitted."""
+    user_data = UserCreate(
+        display_name="Test User",
+        country="CM",
+        preferred_language="en",
+        daily_goal_cards=20,
+    )
+
+    user = await create_user(db_session, user_data)
+    assert user.timezone == "Africa/Douala"
+
+
+@pytest.mark.asyncio
+async def test_create_user_derives_timezone_ng(db_session: AsyncSession) -> None:
+    """Test that NG derives Africa/Lagos when timezone is omitted."""
+    user_data = UserCreate(
+        display_name="Test User",
+        country="NG",
+        preferred_language="en",
+        daily_goal_cards=20,
+    )
+
+    user = await create_user(db_session, user_data)
+    assert user.timezone == "Africa/Lagos"
+
+
+@pytest.mark.asyncio
 async def test_create_user_multi_tz_without_timezone_raises_error(
     db_session: AsyncSession,
 ) -> None:

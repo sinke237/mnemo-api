@@ -28,12 +28,12 @@ def test_is_production_property() -> None:
         api_key_secret="1234567890123456789012345678901234567890",
     )
     assert s.is_production is True
-    assert s.is_development is False
+    assert s.is_development() is False
 
 
 def test_is_development_property() -> None:
     s = Settings(app_env="development")
-    assert s.is_development is True
+    assert s.is_development() is True
     assert s.is_production is False
 
 

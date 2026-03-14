@@ -39,10 +39,10 @@ def test_settings_jwt_validator_and_env_props():
         api_key_secret="1234567890123456789012345678901234567890",
     )
     assert s.is_production
-    assert not s.is_development
+    assert not s.is_development()
 
     s2 = Settings(app_env="development")
-    assert s2.is_development
+    assert s2.is_development()
 
     # short secret should raise
     with pytest.raises(ValueError):

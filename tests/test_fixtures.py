@@ -5,10 +5,11 @@ from mnemo.db.database import Base, engine
 from mnemo.main import app
 
 
-# Create all tables before any tests run (for in-memory SQLite)
+# Create all tables before each test (for in-memory SQLite)
 @pytest.fixture(scope="function", autouse=True)
 async def create_test_database():
     async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
 

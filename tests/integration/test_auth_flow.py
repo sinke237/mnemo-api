@@ -3,7 +3,7 @@ Integration tests for full authentication flow.
 Tests the complete user journey: create user → get API key → get JWT → access profile.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -19,6 +19,14 @@ from mnemo.schemas.user import UserCreate
 from mnemo.services.api_key import create_api_key
 from mnemo.services.auth import create_access_token
 from mnemo.services.user import create_user
+from mnemo.utils.local_time import to_local_time
+
+
+def _parse_iso_datetime(value: str) -> datetime:
+    """Parse ISO 8601 with optional 'Z' suffix."""
+    if value.endswith("Z"):
+        value = value.replace("Z", "+00:00")
+    return datetime.fromisoformat(value)
 
 
 @pytest.fixture
@@ -128,6 +136,10 @@ async def test_full_auth_flow_admin_user(admin_user_with_key: tuple[User, str]) 
         assert profile_data["display_name"] == "Test Admin"
         assert profile_data["country"] == "CM"
         assert profile_data["timezone"] == "Africa/Douala"
+        assert "local_time" in profile_data
+        created_at = _parse_iso_datetime(profile_data["created_at"])
+        expected_local_time = to_local_time(created_at, profile_data["timezone"])
+        assert profile_data["local_time"] == expected_local_time
 
         # Step 3: Update profile
         update_response = await client.patch(

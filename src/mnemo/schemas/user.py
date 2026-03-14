@@ -5,9 +5,10 @@ Request/response models per spec section 11: User Profiles.
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 from mnemo.core.constants import DEFAULT_DAILY_GOAL_CARDS, EducationLevel
+from mnemo.utils.local_time import to_local_time
 
 
 class UserCreate(BaseModel):
@@ -102,6 +103,12 @@ class UserResponse(BaseModel):
     daily_goal_cards: int = Field(..., description="Daily card review goal")
     created_at: datetime = Field(..., description="Account creation timestamp (UTC)")
 
+    @computed_field(return_type=str)
+    def local_time(self) -> str:
+        """Account creation time in the user's local timezone."""
+        local_time_value: str = to_local_time(self.created_at, self.timezone)
+        return local_time_value
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -114,6 +121,7 @@ class UserResponse(BaseModel):
                 "preferred_language": "fr",
                 "daily_goal_cards": 25,
                 "created_at": "2026-03-10T08:30:00Z",
+                "local_time": "2026-03-10T09:30:00+01:00",
             }
         },
         "from_attributes": True,

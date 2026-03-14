@@ -3,14 +3,15 @@ Countries routes.
 Returns supported countries and timezone information.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from mnemo.core.constants import ErrorCode
 from mnemo.schemas.error import ErrorResponse
 from mnemo.utils.timezone import (
-    COUNTRY_TO_TIMEZONE,
-    MULTI_TIMEZONE_COUNTRIES,
+    country_has_multiple_timezones,
     get_all_supported_countries,
+    get_timezone_for_country,
     get_timezones_for_country,
 )
 
@@ -102,9 +103,9 @@ async def get_countries() -> CountriesResponse:
 
     countries = []
     for code in country_codes:
-        primary_tz = COUNTRY_TO_TIMEZONE[code]
+        primary_tz = get_timezone_for_country(code)
         all_tzs = get_timezones_for_country(code)
-        has_multiple = code in MULTI_TIMEZONE_COUNTRIES
+        has_multiple = country_has_multiple_timezones(code)
 
         countries.append(
             CountryInfo(
@@ -144,13 +145,10 @@ async def get_country(country_code: str) -> CountryInfo:
     Raises:
         HTTPException: 404 if country code is not supported
     """
-    from fastapi import HTTPException
-
-    from mnemo.core.constants import ErrorCode
 
     code = country_code.upper()
 
-    if code not in COUNTRY_TO_TIMEZONE:
+    if get_timezone_for_country(code) is None:
         raise HTTPException(
             status_code=404,
             detail={
@@ -162,9 +160,9 @@ async def get_country(country_code: str) -> CountryInfo:
             },
         )
 
-    primary_tz = COUNTRY_TO_TIMEZONE[code]
+    primary_tz = get_timezone_for_country(code)
     all_tzs = get_timezones_for_country(code)
-    has_multiple = code in MULTI_TIMEZONE_COUNTRIES
+    has_multiple = country_has_multiple_timezones(code)
 
     return CountryInfo(
         code=code,

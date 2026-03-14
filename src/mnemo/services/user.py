@@ -59,9 +59,9 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
         MissingTimezoneError: If timezone is missing for multi-timezone country
     """
 
-    def validate_timezone_and_country(user_data: UserCreate) -> None:
+    def resolve_timezone(user_data: UserCreate) -> str:
         """
-        Validate timezone and country for user creation.
+        Resolve timezone and validate country for user creation.
 
         Args:
             user_data: User creation data
@@ -72,23 +72,24 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
             MissingTimezoneError: If timezone required but not provided
         """
         if user_data.timezone is not None:
-            user_data.timezone = normalize_and_precheck_timezone(user_data.timezone)
+            normalized_timezone = normalize_and_precheck_timezone(user_data.timezone)
 
-            tz_list = get_timezones_for_country(user_data.country)
+            tz_list: list[str] = get_timezones_for_country(user_data.country)
             if not tz_list:
                 raise InvalidCountryCodeError(f"Unsupported country code: {user_data.country}")
 
             if country_has_multiple_timezones(user_data.country):
-                if user_data.timezone not in tz_list:
+                if normalized_timezone not in tz_list:
                     raise InvalidTimezoneError(
                         f"Country {user_data.country} requires one of {tz_list}; "
-                        f"got {user_data.timezone}"
+                        f"got {normalized_timezone}"
                     )
             else:
-                if user_data.timezone != tz_list[0]:
+                if normalized_timezone != tz_list[0]:
                     raise InvalidTimezoneError(
-                        f"Invalid timezone {user_data.timezone} for {user_data.country}"
+                        f"Invalid timezone {normalized_timezone} for {user_data.country}"
                     )
+            return normalized_timezone
         else:
             if country_has_multiple_timezones(user_data.country):
                 raise MissingTimezoneError(
@@ -100,10 +101,10 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
                 tz_list = get_timezones_for_country(user_data.country)
                 if not tz_list:
                     raise InvalidCountryCodeError(f"Unsupported country code: {user_data.country}")
-                user_data.timezone = tz_list[0]
+                return tz_list[0]
 
-    # Validate timezone and country
-    validate_timezone_and_country(user_data)
+    # Resolve timezone and validate country
+    resolved_timezone = resolve_timezone(user_data)
 
     # Create user record
     user = User(
@@ -111,7 +112,7 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
         display_name=user_data.display_name,
         country=user_data.country.upper(),
         locale=user_data.locale,
-        timezone=user_data.timezone,
+        timezone=resolved_timezone,
         education_level=user_data.education_level.value if user_data.education_level else None,
         preferred_language=user_data.preferred_language,
         daily_goal_cards=user_data.daily_goal_cards,
@@ -169,7 +170,7 @@ async def update_user(db: AsyncSession, user_id: str, user_data: UserUpdate) -> 
         user.locale = user_data.locale
 
     if user_data.timezone is not None:
-        user_data.timezone = normalize_and_precheck_timezone(user_data.timezone)
+        normalized_timezone = normalize_and_precheck_timezone(user_data.timezone)
 
         # Only allow changing timezone for users in multi-timezone countries
         if not country_has_multiple_timezones(user.country):
@@ -178,18 +179,17 @@ async def update_user(db: AsyncSession, user_id: str, user_data: UserUpdate) -> 
                 "use country-derived timezone"
             )
 
-        allowed_tzs = get_timezones_for_country(user.country)
+        allowed_tzs: list[str] = get_timezones_for_country(user.country)
         if not allowed_tzs:
             raise InvalidTimezoneError(
-                "No timezones configured for multi-timezone country "
-                f"{user.country}: {allowed_tzs}"
+                f"No timezones configured for multi-timezone country {user.country}"
             )
-        if user_data.timezone not in allowed_tzs:
+        if normalized_timezone not in allowed_tzs:
             raise InvalidTimezoneError(
-                f"Timezone {user_data.timezone} is not valid for country {user.country}"
+                f"Timezone {normalized_timezone} is not valid for country {user.country}"
             )
 
-        user.timezone = user_data.timezone
+        user.timezone = normalized_timezone
 
     if user_data.education_level is not None:
         user.education_level = user_data.education_level.value

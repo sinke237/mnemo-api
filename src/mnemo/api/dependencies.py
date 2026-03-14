@@ -137,10 +137,7 @@ async def get_current_user_from_token(
     # Attach token scopes to the returned user instance so downstream
     # dependencies and route handlers can rely on scopes without re-parsing
     # the raw token.
-    try:
-        scopes = cast(list[str], payload.get("scopes", []))
-    except Exception:
-        scopes = []
+    scopes = cast(list[str], payload.get("scopes", []))
 
     # Attach a transient attribute to the SQLAlchemy model instance.
     # Direct attribute assignment is fine on ORM instances for transient data.
