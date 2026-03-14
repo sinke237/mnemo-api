@@ -25,7 +25,7 @@ settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Import all models here so Alembic can detect them for autogenerate
-from mnemo.models import user, api_key
+from mnemo.models import api_key, card_memory_state, deck, flashcard, idempotency_key, user
 
 target_metadata = Base.metadata
 
