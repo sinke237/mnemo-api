@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:17
     container_name: mnemo_postgres
     restart: unless-stopped
     environment:
@@ -33,6 +33,14 @@ services:
       timeout: 5s
       retries: 5
 
+  init-perms:
+    image: alpine:3.20
+    container_name: mnemo_init_perms
+    user: "0:0"
+    volumes:
+      - ./dev_docs:/dev_docs
+    command: sh -c "mkdir -p /dev_docs && chown -R ${UID:-1000}:${GID:-1000} /dev_docs"
+
   api:
     build:
       context: .
@@ -53,6 +61,8 @@ services:
       - ./alembic:/app/alembic
       - ./dev_docs:/app/dev_docs
     depends_on:
+      init-perms:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -61,7 +71,7 @@ services:
     # approach that installs packages into site-packages without console scripts
     command: >
       sh -c "python -m alembic upgrade head &&
-      python -m scripts.seed_dummy_data &&
+      python -m scripts.seed_dummy_data --ensure-doc &&
       python -m uvicorn mnemo.main:app --host 0.0.0.0 --port 8000 --reload"
 
 volumes:

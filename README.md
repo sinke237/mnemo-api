@@ -25,6 +25,17 @@ docker compose up --build
 Seed data is created on startup via `scripts/seed_dummy_data.py`. The script uses the codebase services
 to create **1 admin + 2 regular users**, decks, and cards, and writes the generated IDs and API keys to
 `dev_docs/seed_data.md`.
+If you run `docker compose down -v`, the Postgres volume is deleted and all seeded data is lost.
+Bring the stack back up and re-run the seed step to regenerate keys:
+```bash
+docker compose up -d
+docker compose exec api python -m scripts.seed_dummy_data --ensure-doc
+```
+Note: `--ensure-doc` does **not** overwrite `dev_docs/seed_data.md`. If the file already exists,
+use the command without `--ensure-doc` (or delete the file first) to regenerate fresh IDs and keys:
+```bash
+docker compose exec api python -m scripts.seed_dummy_data
+```
 
 Verify the API:
 ```bash

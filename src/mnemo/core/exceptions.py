@@ -90,6 +90,15 @@ class InsufficientScopeError(AuthenticationError):
     pass
 
 
+# ── Idempotency Exceptions ─────────────────────────────────────────────────────
+
+
+class IdempotencyConflictError(Exception):
+    """Raised when an idempotency key has already been used."""
+
+    pass
+
+
 # ── Deck & Card Exceptions ─────────────────────────────────────────────────────
 
 

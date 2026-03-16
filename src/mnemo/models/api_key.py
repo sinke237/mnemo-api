@@ -7,7 +7,7 @@ Per spec section 02: Authentication and NFR-03.2.
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from mnemo.db.database import Base
@@ -32,8 +32,12 @@ class APIKey(Base):  # type: ignore[misc]
     # User reference
     # Declare an explicit foreign key so Alembic autogenerate picks it up
     user_id: Mapped[str] = mapped_column(
-        String(32), ForeignKey("users.id"), nullable=False, index=True
+        String(32),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )  # References users.id
+    user = relationship("User", passive_deletes=True)
 
     # Key data (hashed per NFR-03.2)
     key_hash: Mapped[str] = mapped_column(

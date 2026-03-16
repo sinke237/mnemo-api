@@ -13,10 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mnemo.api.dependencies import get_current_user_from_token, require_user_scope
 from mnemo.api.utils import _error_response
 from mnemo.core.constants import DEFAULT_DIFFICULTY, ErrorCode, PermissionScope
-from mnemo.core.exceptions import CardNotFoundError, DeckNotFoundError
+from mnemo.core.exceptions import CardNotFoundError, DeckNotFoundError, IdempotencyConflictError
 from mnemo.db.database import get_db
 from mnemo.models.user import User
-from mnemo.schemas.error import ErrorResponse
+from mnemo.schemas.error import ErrorDetail, ErrorResponse
 from mnemo.schemas.flashcard import (
     FlashcardCreate,
     FlashcardReplace,
@@ -53,11 +53,50 @@ async def create_card(
 ) -> FlashcardResponse | JSONResponse:
     endpoint = f"POST /v1/decks/{deck_id}/cards"
     if idempotency_key:
-        record = await idempotency_service.get_idempotency_record(
-            db, current_user.id, endpoint, idempotency_key
-        )
-        if record is not None:
+        try:
+            async with db.begin():
+                record = await idempotency_service.reserve_idempotency_record(
+                    db, current_user.id, endpoint, idempotency_key
+                )
+                card = await flashcard_service.create_card(
+                    db,
+                    user_id=current_user.id,
+                    deck_id=deck_id,
+                    question=card_data.question,
+                    answer=card_data.answer,
+                    source_ref=card_data.source_ref,
+                    tags=card_data.tags or [],
+                    difficulty=(
+                        card_data.difficulty
+                        if card_data.difficulty is not None
+                        else DEFAULT_DIFFICULTY
+                    ),
+                )
+                response = FlashcardResponse.model_validate(card)
+                idempotency_service.finalize_idempotency_record(
+                    record,
+                    status_code=201,
+                    response_body=response.model_dump(mode="json"),
+                )
+            return response
+        except IdempotencyConflictError:
+            record = await idempotency_service.get_idempotency_record(
+                db, current_user.id, endpoint, idempotency_key
+            )
+            if record is None:
+                error = ErrorResponse(
+                    error=ErrorDetail(
+                        code=ErrorCode.IDEMPOTENCY_CONFLICT,
+                        message="Idempotency key conflict.",
+                        status=409,
+                    )
+                )
+                return JSONResponse(status_code=409, content=error.model_dump(mode="json"))
             return JSONResponse(status_code=record.status_code, content=record.response_body)
+        except DeckNotFoundError:
+            return _error_response(
+                ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404
+            )
 
     try:
         card = await flashcard_service.create_card(
@@ -75,19 +114,7 @@ async def create_card(
     except DeckNotFoundError:
         return _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404)
 
-    response = FlashcardResponse.model_validate(card)
-
-    if idempotency_key:
-        await idempotency_service.store_idempotency_record(
-            db,
-            user_id=current_user.id,
-            endpoint=endpoint,
-            key=idempotency_key,
-            status_code=201,
-            response_body=response.model_dump(mode="json"),
-        )
-
-    return response
+    return FlashcardResponse.model_validate(card)
 
 
 @router.get(

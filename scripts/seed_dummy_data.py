@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
 from pathlib import Path
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 
 from mnemo.core.constants import PermissionScope
 from mnemo.db.database import AsyncSessionLocal
@@ -284,9 +285,13 @@ async def main() -> None:
     if args.ensure_doc and SEED_DOC_PATH.exists():
         return
 
-    await _delete_seed_users()
-    data = await _seed_data()
-    _write_seed_doc(data)
+    try:
+        await _delete_seed_users()
+        data = await _seed_data()
+        _write_seed_doc(data)
+    except Exception as exc:  # noqa: BLE001 - surface a clear seeding failure and exit
+        print(f"Seeding failed: {exc}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
