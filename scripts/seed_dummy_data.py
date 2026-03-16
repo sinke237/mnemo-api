@@ -25,6 +25,12 @@ SEED_DISPLAY_NAMES = ["Seed Admin", "Seed User 1", "Seed User 2"]
 SEED_DOC_PATH = Path("dev_docs/seed_data.md")
 
 
+def _mask_key(key: str) -> str:
+    if len(key) <= 8:
+        return "••••"
+    return f"{key[:4]}••••{key[-4:]}"
+
+
 async def _delete_seed_users() -> None:
     async with AsyncSessionLocal() as session:
         await session.execute(delete(User).where(User.display_name.in_(SEED_DISPLAY_NAMES)))
@@ -244,11 +250,11 @@ seed script runs (including via Docker Compose startup).
 Each key is bound to the user listed below.
 
 - Admin (`{data['admin_id']}`)
-  - `{data['admin_key']}`
+  - `{_mask_key(data['admin_key'])}`
 - Regular (`{data['user1_id']}`)
-  - `{data['user1_key']}`
+  - `{_mask_key(data['user1_key'])}`
 - Regular (`{data['user2_id']}`)
-  - `{data['user2_key']}`
+  - `{_mask_key(data['user2_key'])}`
 
 ## Decks
 
