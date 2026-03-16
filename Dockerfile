@@ -31,6 +31,7 @@ COPY --from=builder /app/deps /usr/local/lib/python3.12/site-packages
 
 # Copy application source
 COPY src/ ./src/
+COPY scripts/ ./scripts/
 COPY pyproject.toml .
 COPY alembic.ini .
 COPY alembic/ ./alembic/

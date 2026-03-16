@@ -5,7 +5,7 @@ All v1 endpoints are registered here and mounted under /v1 in main.py.
 
 from fastapi import APIRouter
 
-from mnemo.api.v1.routes import auth, countries, health, users
+from mnemo.api.v1.routes import auth, cards, countries, decks, health, users
 
 router = APIRouter(prefix="/v1")
 
@@ -22,8 +22,8 @@ router.include_router(auth.router)
 router.include_router(users.router)
 
 # Future routes added here as each phase is built:
-# router.include_router(decks.router)
-# router.include_router(cards.router)
 # router.include_router(sessions.router)
 # router.include_router(progress.router)
 # router.include_router(imports.router)
+router.include_router(decks.router)
+router.include_router(cards.router)

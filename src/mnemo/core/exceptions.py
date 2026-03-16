@@ -88,3 +88,45 @@ class InsufficientScopeError(AuthenticationError):
     """Raised when a token or API key lacks required permissions."""
 
     pass
+
+
+# ── Idempotency Exceptions ─────────────────────────────────────────────────────
+
+
+class IdempotencyConflictError(Exception):
+    """Raised when an idempotency key has already been used."""
+
+    pass
+
+
+# ── Deck & Card Exceptions ─────────────────────────────────────────────────────
+
+
+class DeckError(Exception):
+    """Base exception for deck-related errors."""
+
+    pass
+
+
+class DeckNotFoundError(DeckError):
+    """Raised when a deck does not exist or is not accessible."""
+
+    pass
+
+
+class DeckNameConflictError(DeckError):
+    """Raised when a deck name conflicts for the same user."""
+
+    pass
+
+
+class CardError(Exception):
+    """Base exception for card-related errors."""
+
+    pass
+
+
+class CardNotFoundError(CardError):
+    """Raised when a card does not exist or is not accessible."""
+
+    pass
