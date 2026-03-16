@@ -10,7 +10,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from mnemo.core.constants import PermissionScope
 from mnemo.db.database import AsyncSessionLocal
@@ -35,6 +35,14 @@ async def _delete_seed_users() -> None:
     async with AsyncSessionLocal() as session:
         await session.execute(delete(User).where(User.display_name.in_(SEED_DISPLAY_NAMES)))
         await session.commit()
+
+
+async def _seed_users_exist() -> bool:
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(User.id).where(User.display_name.in_(SEED_DISPLAY_NAMES)).limit(1)
+        )
+        return result.scalar_one_or_none() is not None
 
 
 async def _seed_data() -> dict[str, str]:
@@ -289,7 +297,8 @@ async def main() -> None:
     args = parser.parse_args()
 
     if args.ensure_doc and SEED_DOC_PATH.exists():
-        return
+        if await _seed_users_exist():
+            return
 
     try:
         await _delete_seed_users()
