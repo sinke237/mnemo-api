@@ -32,6 +32,7 @@ class ErrorCode(StrEnum):
     # Not found errors (404)
     DECK_NOT_FOUND = "DECK_NOT_FOUND"
     CARD_NOT_FOUND = "CARD_NOT_FOUND"
+    IMPORT_JOB_NOT_FOUND = "IMPORT_JOB_NOT_FOUND"
     SESSION_NOT_FOUND = "SESSION_NOT_FOUND"
     USER_NOT_FOUND = "USER_NOT_FOUND"
 
@@ -52,6 +53,23 @@ class ErrorCode(StrEnum):
 
     # Service unavailable (503)
     IMPORT_SERVICE_DOWN = "IMPORT_SERVICE_DOWN"
+
+
+class HTTPStatusCode:
+    """HTTP status codes for API responses."""
+
+    OK = 200
+    CREATED = 201
+    ACCEPTED = 202
+    NO_CONTENT = 204
+    BAD_REQUEST = 400
+    UNAUTHORIZED = 401
+    FORBIDDEN = 403
+    NOT_FOUND = 404
+    CONFLICT = 409
+    UNPROCESSABLE_ENTITY = 422
+    INTERNAL_SERVER_ERROR = 500
+    SERVICE_UNAVAILABLE = 503
 
 
 # ── Permission Scopes ──────────────────────────────────────────────────────────
@@ -113,6 +131,15 @@ class ImportMode(StrEnum):
 
     MERGE = "merge"  # Add new cards, skip duplicates
     REPLACE = "replace"  # Wipe deck and re-import
+
+
+class ImportJobStatus(StrEnum):
+    """Import job statuses."""
+
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 # ── Difficulty Levels ──────────────────────────────────────────────────────────

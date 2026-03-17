@@ -67,12 +67,53 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     # Invoke uvicorn via the python module so it works with the image build
     # approach that installs packages into site-packages without console scripts
     command: >
-      sh -c "python -m alembic upgrade head &&
-      python -m scripts.seed_dummy_data --ensure-doc &&
+      sh -c "python -m scripts.seed_dummy_data --ensure-doc &&
       python -m uvicorn mnemo.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mnemo_migrator
+    user: "${UID:-1000}:${GID:-1000}"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mnemo:changeme_in_production@postgres:5432/mnemo
+    volumes:
+      - ./alembic:/app/alembic
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: python -m alembic upgrade head
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mnemo_worker
+    restart: unless-stopped
+    user: "${UID:-1000}:${GID:-1000}"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mnemo:changeme_in_production@postgres:5432/mnemo
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    command: python -m mnemo.workers.import_worker
 
 volumes:
   postgres_data:
