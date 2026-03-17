@@ -49,7 +49,7 @@ async def _dequeue_job_id() -> str | None:
     return None
 
 
-async def _claim_db_job(db: AsyncSession) -> str | None:
+async def _claim_db_job(db: AsyncSession) -> ImportJob | None:
     stmt = (
         select(ImportJob)
         .where(ImportJob.status == ImportJobStatus.QUEUED.value)
@@ -59,9 +59,7 @@ async def _claim_db_job(db: AsyncSession) -> str | None:
     )
     result = await db.execute(stmt)
     job = result.scalar_one_or_none()
-    if job is None:
-        return None
-    return str(job.id)
+    return job
 
 
 async def run_worker(poll_interval: float = 1.0) -> None:
@@ -75,16 +73,10 @@ async def run_worker(poll_interval: float = 1.0) -> None:
             job_id = await _dequeue_job_id()
             if job_id:
                 async with AsyncSessionLocal() as db:
-                    # Load job and mark as processing to prevent DB-claim path from picking it up
                     job = await db.get(ImportJob, job_id, with_for_update=True)
                     if job and job.status == ImportJobStatus.QUEUED.value:
-                        job.status = ImportJobStatus.PROCESSING.value
+                        await import_service.process_import_job(db, job_id)
                         await db.commit()
-
-                        # Re-open session for processing
-                        async with AsyncSessionLocal() as db_proc:
-                            await import_service.process_import_job(db_proc, job_id)
-                            await db_proc.commit()
                 continue
 
             # Check if there are any queued jobs before opening a transaction
@@ -98,13 +90,16 @@ async def run_worker(poll_interval: float = 1.0) -> None:
                 has_queued = check_res.scalar_one_or_none() is not None
 
             if has_queued:
+                job_processed = False
                 async with AsyncSessionLocal() as db:
-                    claimed_job_id = await _claim_db_job(db)
-                    if claimed_job_id:
-                        await import_service.process_import_job(db, claimed_job_id)
+                    claimed_job = await _claim_db_job(db)
+                    if claimed_job:
+                        await import_service.process_import_job(db, str(claimed_job.id))
                         await db.commit()
-                    else:
-                        await asyncio.sleep(poll_interval)
+                        job_processed = True
+
+                if not job_processed:
+                    await asyncio.sleep(poll_interval)
             else:
                 await asyncio.sleep(poll_interval)
         except Exception as exc:
