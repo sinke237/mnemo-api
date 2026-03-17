@@ -2,6 +2,8 @@
 Unit tests for user service error handling with custom exceptions.
 """
 
+from collections.abc import AsyncGenerator
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +19,7 @@ from mnemo.services.user import create_user, update_user
 
 
 @pytest.fixture
-async def db_session() -> AsyncSession:
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """
     Provide a clean database session for each test.
     Uses an explicit transaction + savepoint so test commits are isolated and rolled back.

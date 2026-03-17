@@ -16,7 +16,7 @@ from mnemo.services.idempotency import get_idempotency_record
 @pytest.fixture
 def mock_db_session():
     """Fixture for a mocked async database session."""
-    return AsyncSession()
+    return AsyncMock(spec=AsyncSession)
 
 
 @pytest.mark.asyncio

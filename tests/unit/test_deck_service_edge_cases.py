@@ -14,7 +14,7 @@ from mnemo.services.deck import create_deck
 @pytest.fixture
 def mock_db_session():
     """Fixture for a mocked async database session."""
-    return AsyncSession()
+    return AsyncMock(spec=AsyncSession)
 
 
 @pytest.mark.asyncio
