@@ -258,11 +258,11 @@ seed script runs (including via Docker Compose startup).
 Each key is bound to the user listed below.
 
 - Admin (`{data['admin_id']}`)
-  - `{_mask_key(data['admin_key'])}`
+  - `{data['admin_key']}`
 - Regular (`{data['user1_id']}`)
-  - `{_mask_key(data['user1_key'])}`
+  - `{data['user1_key']}`
 - Regular (`{data['user2_id']}`)
-  - `{_mask_key(data['user2_key'])}`
+  - `{data['user2_key']}`
 
 ## Decks
 
