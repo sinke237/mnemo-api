@@ -243,6 +243,25 @@ async def test_update_user_valid_timezone_for_multi_tz_country_succeeds(
 
 
 @pytest.mark.asyncio
+async def test_create_user_multi_tz_with_none_timezone_raises_error(
+    db_session: AsyncSession,
+) -> None:
+    """Test that multi-timezone country with timezone=None raises MissingTimezoneError."""
+    user_data = UserCreate(
+        display_name="US User",
+        country="US",
+        preferred_language="en",
+        daily_goal_cards=20,
+        timezone=None,  # Explicitly None
+    )
+
+    with pytest.raises(MissingTimezoneError) as exc_info:
+        await create_user(db_session, user_data)
+
+    assert "multiple timezones" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
 async def test_update_user_not_found_returns_none(db_session: AsyncSession) -> None:
     """Test that updating non-existent user returns None."""
     update_data = UserUpdate(daily_goal_cards=50)

@@ -28,7 +28,7 @@ async def _deck_name_exists(
     name: str,
     exclude_deck_id: str | None = None,
 ) -> bool:
-    stmt = select(Deck.id).where(Deck.user_id == user_id, Deck.name == name)
+    stmt = select(Deck.id).where(Deck.user_id == user_id, Deck.name.ilike(name))
     if exclude_deck_id is not None:
         stmt = stmt.where(Deck.id != exclude_deck_id)
     result = await db.execute(stmt)

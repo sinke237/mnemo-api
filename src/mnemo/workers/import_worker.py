@@ -62,6 +62,38 @@ async def _claim_db_job(db: AsyncSession) -> ImportJob | None:
     return job
 
 
+async def _process_job(db: AsyncSession, job_id: str) -> bool:
+    job = await db.get(ImportJob, job_id, with_for_update=True)
+    if job and job.status == ImportJobStatus.QUEUED.value:
+        await import_service.process_import_job(db, job_id)
+        await db.commit()
+        return True
+    return False
+
+
+async def _process_redis_job() -> bool:
+    job_id = await _dequeue_job_id()
+    if job_id:
+        async with AsyncSessionLocal() as db:
+            return await _process_job(db, job_id)
+    return False
+
+
+async def _process_db_job() -> bool:
+    async with AsyncSessionLocal() as db:
+        check_stmt = (
+            select(ImportJob.id).where(ImportJob.status == ImportJobStatus.QUEUED.value).limit(1)
+        )
+        has_queued = (await db.execute(check_stmt)).scalar_one_or_none() is not None
+
+    if has_queued:
+        async with AsyncSessionLocal() as db:
+            claimed_job = await _claim_db_job(db)
+            if claimed_job:
+                return await _process_job(db, str(claimed_job.id))
+    return False
+
+
 async def run_worker(poll_interval: float = 1.0) -> None:
     logger.info("import_worker_starting")
     async with AsyncSessionLocal() as db:
@@ -70,37 +102,10 @@ async def run_worker(poll_interval: float = 1.0) -> None:
 
     while True:
         try:
-            job_id = await _dequeue_job_id()
-            if job_id:
-                async with AsyncSessionLocal() as db:
-                    job = await db.get(ImportJob, job_id, with_for_update=True)
-                    if job and job.status == ImportJobStatus.QUEUED.value:
-                        await import_service.process_import_job(db, job_id)
-                        await db.commit()
+            if await _process_redis_job():
                 continue
 
-            # Check if there are any queued jobs before opening a transaction
-            async with AsyncSessionLocal() as db:
-                check_stmt = (
-                    select(ImportJob.id)
-                    .where(ImportJob.status == ImportJobStatus.QUEUED.value)
-                    .limit(1)
-                )
-                check_res = await db.execute(check_stmt)
-                has_queued = check_res.scalar_one_or_none() is not None
-
-            if has_queued:
-                job_processed = False
-                async with AsyncSessionLocal() as db:
-                    claimed_job = await _claim_db_job(db)
-                    if claimed_job:
-                        await import_service.process_import_job(db, str(claimed_job.id))
-                        await db.commit()
-                        job_processed = True
-
-                if not job_processed:
-                    await asyncio.sleep(poll_interval)
-            else:
+            if not await _process_db_job():
                 await asyncio.sleep(poll_interval)
         except Exception as exc:
             logger.error("import_worker_failed", error=str(exc))

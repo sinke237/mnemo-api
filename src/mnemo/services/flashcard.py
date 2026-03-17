@@ -162,7 +162,7 @@ async def delete_card(db: AsyncSession, user_id: str, card_id: str) -> None:
     await db.execute(delete(CardMemoryState).where(CardMemoryState.card_id == card.id))
     await db.delete(card)
 
-    deck.card_count = max(deck.card_count - 1, 0)
+    deck.card_count = max(0, deck.card_count - 1)
     deck.version += 1
 
     await db.flush()

@@ -1,0 +1,25 @@
+"""
+Unit tests for edge cases in the API key service.
+"""
+
+import pytest
+
+from mnemo.services.api_key import extract_api_key_prefix
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "",
+        "   ",
+        "_",
+        "__",
+        "mnm_live_",
+        "mnm_badtype_payload",
+        "badprefix_live_payload",
+    ],
+)
+def test_extract_api_key_prefix_invalid_formats_raise_error(key):
+    """Test that various malformed API keys raise ValueError."""
+    with pytest.raises(ValueError):
+        extract_api_key_prefix(key)

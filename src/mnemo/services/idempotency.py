@@ -49,6 +49,10 @@ async def get_idempotency_record(
         await db.flush()
         return None
 
+    if record.status_code == 0:
+        # Reserved but not yet finalized
+        raise IdempotencyConflictError
+
     return record
 
 

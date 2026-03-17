@@ -275,13 +275,20 @@ def extract_api_key_prefix(plain_key: str) -> str:
     Raises:
         ValueError: If the key format is malformed or invalid
     """
+    if not plain_key or not plain_key.strip():
+        raise ValueError("API key cannot be empty or whitespace-only")
+
     parts = plain_key.split("_")
     if len(parts) < 3 or not parts[2].strip():
         raise ValueError("Malformed API key: expected at least two segments and non-empty payload")
 
     # Optionally validate parts[0] and parts[1] against an allowlist of known prefixes
-    allowed_prefixes = {"mnm", "test"}
+    allowed_prefixes = {"mnm"}
     if parts[0] not in allowed_prefixes:
         raise ValueError(f"Unknown prefix: {parts[0]}")
+
+    allowed_types = {"live", "test"}
+    if parts[1] not in allowed_types:
+        raise ValueError(f"Unknown key type: {parts[1]}")
 
     return f"{parts[0]}_{parts[1]}_"
