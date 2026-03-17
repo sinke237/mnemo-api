@@ -136,13 +136,9 @@ async def import_csv(
     await db.commit()
     await db.refresh(job)
 
-    enqueued = await import_service.enqueue_import_job(job.id)
-    if not enqueued:
-        return _error_response(
-            ErrorCode.IMPORT_SERVICE_DOWN,
-            "Import queue is unavailable. Try again shortly.",
-            HTTPStatusCode.SERVICE_UNAVAILABLE,
-        )
+    # Enqueue the job. If Redis is down, we still return 202 because the job is in the DB.
+    # The worker will eventually pick it up via DB polling.
+    await import_service.enqueue_import_job(job.id)
 
     return ImportJobCreateResponse(
         job_id=job.id,

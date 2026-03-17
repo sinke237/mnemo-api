@@ -169,12 +169,22 @@ def _dedupe_rows(
 
 
 async def _wipe_deck_cards(db: AsyncSession, deck_id: str) -> int:
-    card_ids = await db.execute(select(Flashcard.id).where(Flashcard.deck_id == deck_id))
-    card_id_list = card_ids.scalars().all()
-    if card_id_list:
-        await db.execute(delete(CardMemoryState).where(CardMemoryState.card_id.in_(card_id_list)))
-        await db.execute(delete(Flashcard).where(Flashcard.id.in_(card_id_list)))
-    return len(card_id_list)
+    from sqlalchemy import func
+
+    count_stmt = select(func.count()).select_from(Flashcard).where(Flashcard.deck_id == deck_id)
+    count_res = await db.execute(count_stmt)
+    deleted_count = count_res.scalar_one()
+
+    if deleted_count > 0:
+        await db.execute(
+            delete(CardMemoryState).where(
+                CardMemoryState.card_id.in_(
+                    select(Flashcard.id).where(Flashcard.deck_id == deck_id)
+                )
+            )
+        )
+        await db.execute(delete(Flashcard).where(Flashcard.deck_id == deck_id))
+    return deleted_count
 
 
 async def process_import_job(db: AsyncSession, job_id: str) -> ImportJob | None:
@@ -240,15 +250,18 @@ async def process_import_job(db: AsyncSession, job_id: str) -> ImportJob | None:
         job.completed_at = datetime.now(UTC)
 
     except (ValueError, csv.Error) as exc:
+        await db.rollback()
+        new_errors = list(job.errors) + [str(exc)]
         job.status = ImportJobStatus.FAILED.value
-        job.errors.append(str(exc))
+        job.errors = new_errors
         job.completed_at = datetime.now(UTC)
+        await db.flush()
     except Exception:
+        await db.rollback()
+        new_errors = list(job.errors) + ["An unexpected error occurred during import."]
         job.status = ImportJobStatus.FAILED.value
-        job.errors.append("An unexpected error occurred during import.")
+        job.errors = new_errors
         job.completed_at = datetime.now(UTC)
-        # In a real application, you'd want to log the full exception here.
-    finally:
         await db.flush()
 
     return job
