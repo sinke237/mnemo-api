@@ -250,18 +250,24 @@ async def process_import_job(db: AsyncSession, job_id: str) -> ImportJob | None:
         job.completed_at = datetime.now(UTC)
 
     except (ValueError, csv.Error) as exc:
+        job_id_val = job.id
+        errors_snapshot = list(job.errors)
         await db.rollback()
-        new_errors = list(job.errors) + [str(exc)]
-        job.status = ImportJobStatus.FAILED.value
-        job.errors = new_errors
-        job.completed_at = datetime.now(UTC)
-        await db.flush()
+        job = await db.get(ImportJob, job_id_val)
+        if job:
+            job.status = ImportJobStatus.FAILED.value
+            job.errors = errors_snapshot + [str(exc)]
+            job.completed_at = datetime.now(UTC)
+            await db.flush()
     except Exception:
+        job_id_val = job.id
+        errors_snapshot = list(job.errors)
         await db.rollback()
-        new_errors = list(job.errors) + ["An unexpected error occurred during import."]
-        job.status = ImportJobStatus.FAILED.value
-        job.errors = new_errors
-        job.completed_at = datetime.now(UTC)
-        await db.flush()
+        job = await db.get(ImportJob, job_id_val)
+        if job:
+            job.status = ImportJobStatus.FAILED.value
+            job.errors = errors_snapshot + ["An unexpected error occurred during import."]
+            job.completed_at = datetime.now(UTC)
+            await db.flush()
 
     return job

@@ -58,6 +58,13 @@ async def import_csv(
     current_user: User = _current_user_dep,
     db: AsyncSession = _db_dep,
 ) -> ImportJobCreateResponse | JSONResponse:
+    if file.filename and len(file.filename) > 255:
+        return _error_response(
+            ErrorCode.VALIDATION_ERROR,
+            "Filename cannot be longer than 255 characters.",
+            HTTPStatusCode.BAD_REQUEST,
+        )
+
     raw = await file.read(settings.csv_max_size_bytes + 1)
     await file.close()
 
