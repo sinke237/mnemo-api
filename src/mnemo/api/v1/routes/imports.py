@@ -10,7 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mnemo.api.dependencies import get_current_user_from_token, require_user_scope
 from mnemo.api.utils import _error_response
 from mnemo.core.config import get_settings
-from mnemo.core.constants import ErrorCode, ImportMode, PermissionScope
+from mnemo.core.constants import (
+    ErrorCode,
+    HTTPStatusCode,
+    ImportMode,
+    PermissionScope,
+)
 from mnemo.core.exceptions import DeckNameConflictError
 from mnemo.db.database import get_db
 from mnemo.models.user import User
@@ -32,16 +37,16 @@ settings = get_settings()
 
 @router.post(
     "/csv",
-    status_code=202,
+    status_code=HTTPStatusCode.ACCEPTED,
     response_model=ImportJobCreateResponse,
     dependencies=[Depends(require_user_scope(PermissionScope.IMPORT_WRITE))],
     responses={
-        400: {"model": ErrorResponse},
-        401: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
-        409: {"model": ErrorResponse},
-        503: {"model": ErrorResponse},
+        HTTPStatusCode.BAD_REQUEST: {"model": ErrorResponse},
+        HTTPStatusCode.UNAUTHORIZED: {"model": ErrorResponse},
+        HTTPStatusCode.FORBIDDEN: {"model": ErrorResponse},
+        HTTPStatusCode.NOT_FOUND: {"model": ErrorResponse},
+        HTTPStatusCode.CONFLICT: {"model": ErrorResponse},
+        HTTPStatusCode.SERVICE_UNAVAILABLE: {"model": ErrorResponse},
     },
     summary="Upload CSV and start import job",
 )
@@ -53,14 +58,14 @@ async def import_csv(
     current_user: User = _current_user_dep,
     db: AsyncSession = _db_dep,
 ) -> ImportJobCreateResponse | JSONResponse:
-    raw = await file.read()
+    raw = await file.read(settings.csv_max_size_bytes + 1)
     await file.close()
 
     if len(raw) > settings.csv_max_size_bytes:
         return _error_response(
             ErrorCode.INVALID_CSV_FORMAT,
             f"CSV exceeds max size of {settings.csv_max_size_bytes} bytes.",
-            400,
+            HTTPStatusCode.BAD_REQUEST,
         )
 
     try:
@@ -69,14 +74,21 @@ async def import_csv(
         return _error_response(
             ErrorCode.INVALID_CSV_FORMAT,
             "CSV must be UTF-8 encoded.",
-            400,
+            HTTPStatusCode.BAD_REQUEST,
         )
 
     if not file_text.strip():
         return _error_response(
             ErrorCode.INVALID_CSV_FORMAT,
             "CSV file is empty.",
-            400,
+            HTTPStatusCode.BAD_REQUEST,
+        )
+
+    if deck_id and deck_name:
+        return _error_response(
+            ErrorCode.VALIDATION_ERROR,
+            "Provide either deck_id or deck_name, not both.",
+            HTTPStatusCode.BAD_REQUEST,
         )
 
     deck = None
@@ -84,14 +96,16 @@ async def import_csv(
         deck = await deck_service.get_deck_by_id(db, current_user.id, deck_id)
         if deck is None:
             return _error_response(
-                ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404
+                ErrorCode.DECK_NOT_FOUND,
+                f"No deck found with ID {deck_id}.",
+                HTTPStatusCode.NOT_FOUND,
             )
     else:
         if not deck_name:
             return _error_response(
                 ErrorCode.VALIDATION_ERROR,
                 "deck_name is required when deck_id is not provided.",
-                400,
+                HTTPStatusCode.BAD_REQUEST,
             )
         try:
             deck = await deck_service.create_deck(
@@ -102,14 +116,14 @@ async def import_csv(
                 tags=[],
             )
         except DeckNameConflictError as exc:
-            return _error_response(ErrorCode.DECK_NAME_CONFLICT, str(exc), 409)
+            return _error_response(ErrorCode.DECK_NAME_CONFLICT, str(exc), HTTPStatusCode.CONFLICT)
 
     resolved_deck_id = deck.id if deck is not None else deck_id
     if resolved_deck_id is None:
         return _error_response(
             ErrorCode.VALIDATION_ERROR,
             "deck_id could not be resolved for import.",
-            400,
+            HTTPStatusCode.BAD_REQUEST,
         )
     job = await import_service.create_import_job(
         db,
@@ -119,14 +133,15 @@ async def import_csv(
         file_text=file_text,
         original_filename=file.filename,
     )
+    await db.commit()
+    await db.refresh(job)
 
     enqueued = await import_service.enqueue_import_job(job.id)
-    if not enqueued and settings.is_production:
-        await db.rollback()
+    if not enqueued:
         return _error_response(
             ErrorCode.IMPORT_SERVICE_DOWN,
             "Import queue is unavailable. Try again shortly.",
-            503,
+            HTTPStatusCode.SERVICE_UNAVAILABLE,
         )
 
     return ImportJobCreateResponse(
@@ -141,9 +156,9 @@ async def import_csv(
     response_model=ImportJobStatusResponse,
     dependencies=[Depends(require_user_scope(PermissionScope.IMPORT_WRITE))],
     responses={
-        401: {"model": ErrorResponse},
-        403: {"model": ErrorResponse},
-        404: {"model": ErrorResponse},
+        HTTPStatusCode.UNAUTHORIZED: {"model": ErrorResponse},
+        HTTPStatusCode.FORBIDDEN: {"model": ErrorResponse},
+        HTTPStatusCode.NOT_FOUND: {"model": ErrorResponse},
     },
     summary="Get import job status",
 )
@@ -154,7 +169,11 @@ async def get_import_job(
 ) -> ImportJobStatusResponse | JSONResponse:
     job = await import_service.get_import_job(db, user_id=current_user.id, job_id=job_id)
     if job is None:
-        return _error_response(ErrorCode.VALIDATION_ERROR, f"No job found with ID {job_id}.", 404)
+        return _error_response(
+            ErrorCode.IMPORT_JOB_NOT_FOUND,
+            f"No job found with ID {job_id}.",
+            HTTPStatusCode.NOT_FOUND,
+        )
 
     completed_local = (
         to_local_time(job.completed_at, current_user.timezone) if job.completed_at else None

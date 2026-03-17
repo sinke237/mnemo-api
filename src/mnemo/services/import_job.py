@@ -14,7 +14,7 @@ from io import StringIO
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mnemo.core.constants import DEFAULT_DIFFICULTY, ImportMode
+from mnemo.core.constants import DEFAULT_DIFFICULTY, ImportJobStatus, ImportMode
 from mnemo.db.redis import get_redis
 from mnemo.models.card_memory_state import CardMemoryState
 from mnemo.models.deck import Deck
@@ -25,19 +25,13 @@ from mnemo.utils.id_generator import generate_card_id, generate_import_job_id
 IMPORT_QUEUE_KEY = "mnemo:import:queue"
 
 
-class ImportJobStatus:
-    QUEUED = "queued"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
 def _is_header_row(row: list[str]) -> bool:
     if len(row) < 2:
         return False
     first = row[0].strip().lower()
     second = row[1].strip().lower()
-    return "question" in first and "answer" in second
+    # Only match if the cells are exactly "question" and "answer", not if they contain those words
+    return first == "question" and second == "answer"
 
 
 def _normalize_pair(question: str, answer: str) -> tuple[str, str]:
@@ -112,7 +106,7 @@ async def create_import_job(
         id=generate_import_job_id(),
         user_id=user_id,
         deck_id=deck_id,
-        status=ImportJobStatus.QUEUED,
+        status=ImportJobStatus.QUEUED.value,
         mode=mode.value,
         file_text=file_text,
         original_filename=original_filename,
@@ -188,10 +182,10 @@ async def process_import_job(db: AsyncSession, job_id: str) -> ImportJob | None:
     if job is None:
         return None
 
-    if job.status not in {ImportJobStatus.QUEUED, ImportJobStatus.PROCESSING}:
+    if job.status not in {ImportJobStatus.QUEUED.value, ImportJobStatus.PROCESSING.value}:
         return job
 
-    job.status = ImportJobStatus.PROCESSING
+    job.status = ImportJobStatus.PROCESSING.value
     await db.flush()
 
     cards_added = 0
@@ -241,17 +235,17 @@ async def process_import_job(db: AsyncSession, job_id: str) -> ImportJob | None:
             if job.original_filename:
                 deck.source_file = job.original_filename
 
-        job.status = ImportJobStatus.COMPLETED
+        job.status = ImportJobStatus.COMPLETED.value
         job.cards_imported = cards_added
         job.completed_at = datetime.now(UTC)
 
     except (ValueError, csv.Error) as exc:
-        job.status = ImportJobStatus.FAILED
-        job.errors = [*job.errors, str(exc)]
+        job.status = ImportJobStatus.FAILED.value
+        job.errors.append(str(exc))
         job.completed_at = datetime.now(UTC)
     except Exception:
-        job.status = ImportJobStatus.FAILED
-        job.errors = [*job.errors, "An unexpected error occurred during import."]
+        job.status = ImportJobStatus.FAILED.value
+        job.errors.append("An unexpected error occurred during import.")
         job.completed_at = datetime.now(UTC)
         # In a real application, you'd want to log the full exception here.
     finally:

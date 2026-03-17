@@ -25,12 +25,6 @@ SEED_DISPLAY_NAMES = ["Seed Admin", "Seed User 1", "Seed User 2"]
 SEED_DOC_PATH = Path("dev_docs/seed_data.md")
 
 
-def _mask_key(key: str) -> str:
-    if len(key) <= 8:
-        return "••••"
-    return f"{key[:4]}••••{key[-4:]}"
-
-
 async def _delete_seed_users() -> None:
     async with AsyncSessionLocal() as session:
         await session.execute(delete(User).where(User.display_name.in_(SEED_DISPLAY_NAMES)))

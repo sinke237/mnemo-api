@@ -74,6 +74,27 @@ services:
       python -m scripts.seed_dummy_data --ensure-doc &&
       python -m uvicorn mnemo.main:app --host 0.0.0.0 --port 8000 --reload"
 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mnemo_worker
+    restart: unless-stopped
+    user: "${UID:-1000}:${GID:-1000}"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mnemo:changeme_in_production@postgres:5432/mnemo
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python -m mnemo.workers.import_worker
+
 volumes:
   postgres_data:
   redis_data:
