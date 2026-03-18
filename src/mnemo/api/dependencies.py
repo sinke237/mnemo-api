@@ -159,6 +159,7 @@ async def get_current_user_from_token(
 
 # Module-level singleton referencing the callables above — used in factory deps below.
 api_key_dep = Depends(get_api_key_from_header)
+current_user_dep = Depends(get_current_user_from_token)
 
 
 def require_scope(required_scope: PermissionScope) -> Callable[..., APIKey]:

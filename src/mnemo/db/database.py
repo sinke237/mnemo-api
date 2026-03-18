@@ -6,6 +6,7 @@ Uses SQLAlchemy async engine with asyncpg driver.
 from collections.abc import AsyncGenerator
 
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import StaticPool
@@ -15,29 +16,23 @@ from mnemo.core.config import get_settings
 settings = get_settings()
 
 
-if settings.database_url.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
-    if ":memory:" in settings.database_url:
-        # Use StaticPool for in-memory SQLite so tables persist across connections.
-        engine = create_async_engine(
-            settings.database_url,
-            echo=settings.is_development,
-            connect_args=connect_args,
-            poolclass=StaticPool,
-        )
-    else:
-        engine = create_async_engine(
-            settings.database_url,
-            echo=settings.is_development,
-            connect_args=connect_args,
-        )
+url = make_url(settings.database_url)
+
+if url.drivername.startswith("sqlite"):
+    url = url.set(drivername="sqlite+aiosqlite")
+    engine = create_async_engine(
+        url,
+        echo=settings.is_development,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool if url.database == ":memory:" else None,
+    )
 else:
     engine = create_async_engine(
-        settings.database_url,
-        echo=settings.is_development,  # log SQL in dev only
+        url,
+        echo=settings.is_development,
         pool_size=10,
         max_overflow=20,
-        pool_pre_ping=True,  # verify connections before use
+        pool_pre_ping=True,
     )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -54,6 +49,15 @@ class Base(DeclarativeBase):
     """Base class for all SQLAlchemy models."""
 
     pass
+
+
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Yield a database session for use in tests or scripts.
+    Ensures the session is closed after use.
+    """
+    async with AsyncSessionLocal() as session:
+        yield session
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
