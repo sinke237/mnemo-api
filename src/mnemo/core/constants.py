@@ -96,6 +96,16 @@ DEFAULT_API_KEY_SCOPES = [
 ]
 
 
+# ── API Key Definitions ────────────────────────────────────────────────────────
+# Per spec section 02: Authentication
+
+API_KEY_PREFIX = "mnm"
+API_KEY_LIVE_TYPE = "live"
+API_KEY_TEST_TYPE = "test"
+ALLOWED_API_KEY_PREFIXES = frozenset([API_KEY_PREFIX])
+ALLOWED_API_KEY_TYPES = frozenset([API_KEY_LIVE_TYPE, API_KEY_TEST_TYPE])
+
+
 # ── Education Levels ───────────────────────────────────────────────────────────
 # Per spec section 11: User Profiles
 

@@ -6,7 +6,7 @@ Per spec section 06: Decks and FR-02.*.
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from sqlalchemy.types import JSON
@@ -22,7 +22,10 @@ class Deck(Base):  # type: ignore[misc]
     """
 
     __tablename__ = "decks"
-    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_decks_user_name"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_decks_user_name"),
+        Index("ix_decks_user_name_lower", "user_id", text("lower(name)"), unique=True),
+    )
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)  # dck_xxxxxxxx
 

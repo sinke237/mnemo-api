@@ -7,6 +7,7 @@ Per spec section 02: Authentication and NFR-03.2.
 import hashlib
 import hmac
 import json
+import re
 import uuid
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -17,7 +18,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.core.config import Settings, get_settings
-from mnemo.core.constants import DEFAULT_API_KEY_SCOPES, PermissionScope
+from mnemo.core.constants import (
+    ALLOWED_API_KEY_PREFIXES,
+    ALLOWED_API_KEY_TYPES,
+    DEFAULT_API_KEY_SCOPES,
+    PermissionScope,
+)
 from mnemo.models.api_key import APIKey
 from mnemo.services import user as user_service
 from mnemo.utils.id_generator import generate_api_key
@@ -275,13 +281,22 @@ def extract_api_key_prefix(plain_key: str) -> str:
     Raises:
         ValueError: If the key format is malformed or invalid
     """
+    if not plain_key or not plain_key.strip():
+        raise ValueError("API key cannot be empty or whitespace-only")
+
     parts = plain_key.split("_")
-    if len(parts) < 3 or not parts[2].strip():
-        raise ValueError("Malformed API key: expected at least two segments and non-empty payload")
+    if len(parts) != 3:
+        raise ValueError("Malformed API key: expected exactly 3 segments")
 
-    # Optionally validate parts[0] and parts[1] against an allowlist of known prefixes
-    allowed_prefixes = {"mnm", "test"}
-    if parts[0] not in allowed_prefixes:
-        raise ValueError(f"Unknown prefix: {parts[0]}")
+    prefix_part, type_part, key_part = parts
 
-    return f"{parts[0]}_{parts[1]}_"
+    if prefix_part not in ALLOWED_API_KEY_PREFIXES:
+        raise ValueError(f"Unknown prefix: {prefix_part}")
+
+    if type_part not in ALLOWED_API_KEY_TYPES:
+        raise ValueError(f"Unknown key type: {type_part}")
+
+    if len(key_part) != 64 or not re.fullmatch(r"[0-9a-f]{64}", key_part):
+        raise ValueError("Malformed API key: invalid key payload format")
+
+    return f"{prefix_part}_{type_part}_"

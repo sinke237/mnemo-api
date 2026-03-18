@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
@@ -28,7 +29,7 @@ async def _deck_name_exists(
     name: str,
     exclude_deck_id: str | None = None,
 ) -> bool:
-    stmt = select(Deck.id).where(Deck.user_id == user_id, Deck.name == name)
+    stmt = select(Deck.id).where(Deck.user_id == user_id, func.lower(Deck.name) == func.lower(name))
     if exclude_deck_id is not None:
         stmt = stmt.where(Deck.id != exclude_deck_id)
     result = await db.execute(stmt)
@@ -56,7 +57,11 @@ async def create_deck(
         version=1,
     )
     db.add(deck)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as err:
+        await db.rollback()
+        raise DeckNameConflictError(f"Deck name already exists: {name}") from err
     await db.refresh(deck)
     return deck
 
@@ -141,7 +146,11 @@ async def update_deck(
     if changed:
         deck.version += 1
 
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as err:
+        await db.rollback()
+        raise DeckNameConflictError(f"Deck name already exists: {deck.name}") from err
     await db.refresh(deck)
     return deck
 

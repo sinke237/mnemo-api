@@ -62,6 +62,71 @@ async def _claim_db_job(db: AsyncSession) -> ImportJob | None:
     return job
 
 
+async def _process_job(
+    db: AsyncSession, job_id: str, job: ImportJob | None = None
+) -> tuple[bool, bool]:
+    """
+    Processes a job.
+    Returns a tuple of (processed_successfully, is_retriable).
+    """
+    if not job:
+        job = await db.get(ImportJob, job_id, with_for_update=True, populate_existing=True)
+
+    if not job or job.status != ImportJobStatus.QUEUED.value:
+        return False, False  # Not successful, not retriable
+
+    result_job = await import_service.process_import_job(db, job_id)
+
+    if result_job and result_job.status in {
+        ImportJobStatus.COMPLETED.value,
+        ImportJobStatus.FAILED.value,
+    }:
+        await db.commit()
+        return True, False  # Successful, not retriable
+    else:
+        await db.rollback()
+        return False, True  # Not successful, but retriable
+
+
+async def _requeue_job_id(job_id: str) -> bool:
+    try:
+        redis = get_redis()
+        await redis.rpush(import_service.IMPORT_QUEUE_KEY, job_id)
+        return True
+    except Exception as exc:
+        logger.error("import_requeue_error", error=str(exc), job_id=job_id)
+        return False
+
+
+async def _process_redis_job() -> bool:
+    job_id = await _dequeue_job_id()
+    if job_id:
+        processed_successfully, is_retriable = False, False
+        try:
+            async with AsyncSessionLocal() as db:
+                processed_successfully, is_retriable = await _process_job(db, job_id)
+
+            if is_retriable:
+                if await _requeue_job_id(job_id):
+                    logger.warning("import_job_failed_requeued", job_id=job_id)
+
+            return processed_successfully
+        except Exception as exc:
+            logger.error("import_job_exception", error=str(exc), job_id=job_id)
+            await _requeue_job_id(job_id)
+            return False
+    return False
+
+
+async def _process_db_job() -> bool:
+    async with AsyncSessionLocal() as db:
+        claimed_job = await _claim_db_job(db)
+        if claimed_job:
+            processed_successfully, _ = await _process_job(db, str(claimed_job.id), job=claimed_job)
+            return processed_successfully
+    return False
+
+
 async def run_worker(poll_interval: float = 1.0) -> None:
     logger.info("import_worker_starting")
     async with AsyncSessionLocal() as db:
@@ -70,37 +135,10 @@ async def run_worker(poll_interval: float = 1.0) -> None:
 
     while True:
         try:
-            job_id = await _dequeue_job_id()
-            if job_id:
-                async with AsyncSessionLocal() as db:
-                    job = await db.get(ImportJob, job_id, with_for_update=True)
-                    if job and job.status == ImportJobStatus.QUEUED.value:
-                        await import_service.process_import_job(db, job_id)
-                        await db.commit()
+            if await _process_redis_job():
                 continue
 
-            # Check if there are any queued jobs before opening a transaction
-            async with AsyncSessionLocal() as db:
-                check_stmt = (
-                    select(ImportJob.id)
-                    .where(ImportJob.status == ImportJobStatus.QUEUED.value)
-                    .limit(1)
-                )
-                check_res = await db.execute(check_stmt)
-                has_queued = check_res.scalar_one_or_none() is not None
-
-            if has_queued:
-                job_processed = False
-                async with AsyncSessionLocal() as db:
-                    claimed_job = await _claim_db_job(db)
-                    if claimed_job:
-                        await import_service.process_import_job(db, str(claimed_job.id))
-                        await db.commit()
-                        job_processed = True
-
-                if not job_processed:
-                    await asyncio.sleep(poll_interval)
-            else:
+            if not await _process_db_job():
                 await asyncio.sleep(poll_interval)
         except Exception as exc:
             logger.error("import_worker_failed", error=str(exc))
