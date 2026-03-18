@@ -214,31 +214,32 @@ async def test_csv_import_oversized_file_rejected(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "csv_text",
+    [
+        "Q1,A1\nQ2,A2",  # Comma
+        "Q1;A1\nQ2;A2",  # Semicolon
+        "Q1\tA1\nQ2\tA2",  # Tab
+    ],
+)
 async def test_csv_import_with_different_delimiters(
-    client: AsyncClient, user_token: tuple[User, str]
+    client: AsyncClient, user_token: tuple[User, str], csv_text: str
 ) -> None:
     _, token = user_token
     headers = {"Authorization": f"Bearer {token}"}
 
-    csv_texts = [
-        "Q1,A1\nQ2,A2",  # Comma
-        "Q1;A1\nQ2;A2",  # Semicolon
-        "Q1\tA1\nQ2\tA2",  # Tab
-    ]
+    resp = await client.post(
+        "/v1/import/csv",
+        headers=headers,
+        files={"file": ("cards.csv", csv_text, "text/csv")},
+        data={"deck_name": "Delimiter Deck", "mode": "merge"},
+    )
+    assert resp.status_code == 202
+    job_id = resp.json()["job_id"]
+    deck_id = resp.json()["deck_id"]
 
-    for i, csv_text in enumerate(csv_texts):
-        resp = await client.post(
-            "/v1/import/csv",
-            headers=headers,
-            files={"file": (f"cards_{i}.csv", csv_text, "text/csv")},
-            data={"deck_name": f"Delimiter Deck {i}", "mode": "merge"},
-        )
-        assert resp.status_code == 202
-        job_id = resp.json()["job_id"]
-        deck_id = resp.json()["deck_id"]
+    await _process_job(job_id)
 
-        await _process_job(job_id)
-
-        cards_resp = await client.get(f"/v1/decks/{deck_id}/cards", headers=headers)
-        assert cards_resp.status_code == 200
-        assert cards_resp.json()["pagination"]["total"] == 2
+    cards_resp = await client.get(f"/v1/decks/{deck_id}/cards", headers=headers)
+    assert cards_resp.status_code == 200
+    assert cards_resp.json()["pagination"]["total"] == 2

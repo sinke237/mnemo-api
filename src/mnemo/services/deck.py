@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
@@ -56,7 +57,11 @@ async def create_deck(
         version=1,
     )
     db.add(deck)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as err:
+        await db.rollback()
+        raise DeckNameConflictError(f"Deck name already exists: {name}") from err
     await db.refresh(deck)
     return deck
 
@@ -141,7 +146,11 @@ async def update_deck(
     if changed:
         deck.version += 1
 
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as err:
+        await db.rollback()
+        raise DeckNameConflictError(f"Deck name already exists: {name}") from err
     await db.refresh(deck)
     return deck
 

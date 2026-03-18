@@ -81,16 +81,9 @@ async def _process_redis_job() -> bool:
 
 async def _process_db_job() -> bool:
     async with AsyncSessionLocal() as db:
-        check_stmt = (
-            select(ImportJob.id).where(ImportJob.status == ImportJobStatus.QUEUED.value).limit(1)
-        )
-        has_queued = (await db.execute(check_stmt)).scalar_one_or_none() is not None
-
-    if has_queued:
-        async with AsyncSessionLocal() as db:
-            claimed_job = await _claim_db_job(db)
-            if claimed_job:
-                return await _process_job(db, str(claimed_job.id))
+        claimed_job = await _claim_db_job(db)
+        if claimed_job:
+            return await _process_job(db, str(claimed_job.id))
     return False
 
 

@@ -77,17 +77,29 @@ async def test_create_user_derives_timezone_ng(db_session: AsyncSession) -> None
 
 
 @pytest.mark.asyncio
-async def test_create_user_multi_tz_without_timezone_raises_error(
-    db_session: AsyncSession,
+@pytest.mark.parametrize(
+    "user_data_kwargs",
+    [
+        {
+            "display_name": "US User",
+            "country": "US",
+            "preferred_language": "en",
+            "daily_goal_cards": 20,
+        },  # Omitted
+        {
+            "display_name": "US User",
+            "country": "US",
+            "preferred_language": "en",
+            "daily_goal_cards": 20,
+            "timezone": None,
+        },  # Explicitly None
+    ],
+)
+async def test_create_user_multi_tz_missing_timezone_raises_error(
+    db_session: AsyncSession, user_data_kwargs: dict
 ) -> None:
     """Test that multi-timezone country without timezone raises MissingTimezoneError."""
-    user_data = UserCreate(
-        display_name="US User",
-        country="US",  # Multi-timezone country
-        preferred_language="en",
-        daily_goal_cards=20,
-        # No timezone provided
-    )
+    user_data = UserCreate(**user_data_kwargs)
 
     with pytest.raises(MissingTimezoneError) as exc_info:
         await create_user(db_session, user_data)
@@ -242,25 +254,6 @@ async def test_update_user_valid_timezone_for_multi_tz_country_succeeds(
 
     assert updated_user is not None
     assert updated_user.timezone == "America/Los_Angeles"
-
-
-@pytest.mark.asyncio
-async def test_create_user_multi_tz_with_none_timezone_raises_error(
-    db_session: AsyncSession,
-) -> None:
-    """Test that multi-timezone country with timezone=None raises MissingTimezoneError."""
-    user_data = UserCreate(
-        display_name="US User",
-        country="US",
-        preferred_language="en",
-        daily_goal_cards=20,
-        timezone=None,  # Explicitly None
-    )
-
-    with pytest.raises(MissingTimezoneError) as exc_info:
-        await create_user(db_session, user_data)
-
-    assert "multiple timezones" in str(exc_info.value)
 
 
 @pytest.mark.asyncio

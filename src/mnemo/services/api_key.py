@@ -17,7 +17,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.core.config import Settings, get_settings
-from mnemo.core.constants import DEFAULT_API_KEY_SCOPES, PermissionScope
+from mnemo.core.constants import (
+    ALLOWED_API_KEY_PREFIXES,
+    ALLOWED_API_KEY_TYPES,
+    DEFAULT_API_KEY_SCOPES,
+    PermissionScope,
+)
 from mnemo.models.api_key import APIKey
 from mnemo.services import user as user_service
 from mnemo.utils.id_generator import generate_api_key
@@ -283,12 +288,10 @@ def extract_api_key_prefix(plain_key: str) -> str:
         raise ValueError("Malformed API key: expected at least two segments and non-empty payload")
 
     # Optionally validate parts[0] and parts[1] against an allowlist of known prefixes
-    allowed_prefixes = {"mnm"}
-    if parts[0] not in allowed_prefixes:
+    if parts[0] not in ALLOWED_API_KEY_PREFIXES:
         raise ValueError(f"Unknown prefix: {parts[0]}")
 
-    allowed_types = {"live", "test"}
-    if parts[1] not in allowed_types:
+    if parts[1] not in ALLOWED_API_KEY_TYPES:
         raise ValueError(f"Unknown key type: {parts[1]}")
 
     return f"{parts[0]}_{parts[1]}_"

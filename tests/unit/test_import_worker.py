@@ -77,9 +77,6 @@ async def test_process_redis_job_dequeues_and_processes(
     job_id = "redis_job_id"
     mock_dequeue.return_value = job_id
     mock_session_local.return_value.__aenter__.return_value = mock_db_session
-    job = ImportJob(id=job_id, status=ImportJobStatus.QUEUED.value)
-    mock_db_session.get.return_value = job
-
     with patch("mnemo.workers.import_worker._process_job") as mock_process:
         mock_process.return_value = True
         result = await _process_redis_job()
