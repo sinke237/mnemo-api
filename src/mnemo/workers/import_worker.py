@@ -62,10 +62,18 @@ async def _claim_db_job(db: AsyncSession) -> ImportJob | None:
     return job
 
 
-async def _process_job(db: AsyncSession, job_id: str) -> bool:
-    job = await db.get(ImportJob, job_id, with_for_update=True)
+async def _process_job(
+    db: AsyncSession, job_id: str, job: ImportJob | None = None
+) -> tuple[bool, bool]:
+    """
+    Processes a job.
+    Returns a tuple of (processed_successfully, is_retriable).
+    """
+    if not job:
+        job = await db.get(ImportJob, job_id, with_for_update=True, populate_existing=True)
+
     if not job or job.status != ImportJobStatus.QUEUED.value:
-        return False
+        return False, False  # Not successful, not retriable
 
     result_job = await import_service.process_import_job(db, job_id)
 
@@ -74,17 +82,34 @@ async def _process_job(db: AsyncSession, job_id: str) -> bool:
         ImportJobStatus.FAILED.value,
     }:
         await db.commit()
-        return True
+        return True, False  # Successful, not retriable
     else:
         await db.rollback()
+        return False, True  # Not successful, but retriable
+
+
+async def _requeue_job_id(job_id: str) -> bool:
+    try:
+        redis = get_redis()
+        await redis.rpush(import_service.IMPORT_QUEUE_KEY, job_id)
+        return True
+    except Exception as exc:
+        logger.error("import_requeue_error", error=str(exc), job_id=job_id)
         return False
 
 
 async def _process_redis_job() -> bool:
     job_id = await _dequeue_job_id()
     if job_id:
+        processed_successfully, is_retriable = False, False
         async with AsyncSessionLocal() as db:
-            return await _process_job(db, job_id)
+            processed_successfully, is_retriable = await _process_job(db, job_id)
+
+        if is_retriable:
+            if await _requeue_job_id(job_id):
+                logger.warning("import_job_failed_requeued", job_id=job_id)
+
+        return processed_successfully
     return False
 
 
@@ -92,7 +117,8 @@ async def _process_db_job() -> bool:
     async with AsyncSessionLocal() as db:
         claimed_job = await _claim_db_job(db)
         if claimed_job:
-            return await _process_job(db, str(claimed_job.id))
+            processed_successfully, _ = await _process_job(db, str(claimed_job.id), job=claimed_job)
+            return processed_successfully
     return False
 
 

@@ -46,9 +46,10 @@ async def test_process_job_success(mock_db_session, mock_import_service):
         file_text="question,answer",
     )
 
-    result = await _process_job(mock_db_session, job_id)
+    success, retriable = await _process_job(mock_db_session, job_id)
 
-    assert result is True
+    assert success is True
+    assert retriable is False
     mock_import_service.process_import_job.assert_called_once_with(mock_db_session, job_id)
     mock_db_session.commit.assert_called_once()
 
@@ -58,9 +59,10 @@ async def test_process_job_not_found(mock_db_session, mock_import_service):
     job_id = "not_found_id"
     mock_db_session.get.return_value = None
 
-    result = await _process_job(mock_db_session, job_id)
+    success, retriable = await _process_job(mock_db_session, job_id)
 
-    assert result is False
+    assert success is False
+    assert retriable is False
     mock_import_service.process_import_job.assert_not_called()
 
 
@@ -77,10 +79,42 @@ async def test_process_job_wrong_status(mock_db_session, mock_import_service):
     )
     mock_db_session.get.return_value = job
 
-    result = await _process_job(mock_db_session, job_id)
+    success, retriable = await _process_job(mock_db_session, job_id)
 
-    assert result is False
+    assert success is False
+    assert retriable is False
     mock_import_service.process_import_job.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_process_job_unexpected_status_rollback(mock_db_session, mock_import_service):
+    """Test that _process_job rolls back when the service returns an unexpected status."""
+    job_id = "test_job_id"
+    job = ImportJob(
+        id=job_id,
+        status=ImportJobStatus.QUEUED.value,
+        user_id="test_user",
+        deck_id="test_deck",
+        mode=ImportMode.MERGE.value,
+        file_text="question,answer",
+    )
+    mock_db_session.get.return_value = job
+    mock_import_service.process_import_job.return_value = ImportJob(
+        id=job_id,
+        status=ImportJobStatus.PROCESSING.value,  # Unexpected status
+        user_id="test_user",
+        deck_id="test_deck",
+        mode=ImportMode.MERGE.value,
+        file_text="question,answer",
+    )
+
+    success, retriable = await _process_job(mock_db_session, job_id)
+
+    assert success is False
+    assert retriable is True
+    mock_import_service.process_import_job.assert_called_once_with(mock_db_session, job_id)
+    mock_db_session.rollback.assert_called_once()
+    mock_db_session.commit.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -93,7 +127,7 @@ async def test_process_redis_job_dequeues_and_processes(
     mock_dequeue.return_value = job_id
     mock_session_local.return_value.__aenter__.return_value = mock_db_session
     with patch("mnemo.workers.import_worker._process_job") as mock_process:
-        mock_process.return_value = True
+        mock_process.return_value = (True, False)
         result = await _process_redis_job()
 
     assert result is True
@@ -127,20 +161,13 @@ async def test_process_db_job_claims_and_processes(
     mock_claim.return_value = claimed_job
     mock_session_local.return_value.__aenter__.return_value = mock_db_session
 
-    # Mock the database check for queued jobs
-    mock_execute = AsyncMock()
-    mock_scalar = MagicMock()
-    mock_scalar.scalar_one_or_none.return_value = "some_id"  # Indicates a job is queued
-    mock_execute.return_value = mock_scalar
-    mock_db_session.execute = mock_execute
-
     with patch("mnemo.workers.import_worker._process_job") as mock_process:
-        mock_process.return_value = True
+        mock_process.return_value = (True, False)
         result = await _process_db_job()
 
     assert result is True
     mock_claim.assert_called_once_with(mock_db_session)
-    mock_process.assert_called_once_with(mock_db_session, job_id)
+    mock_process.assert_called_once_with(mock_db_session, job_id, job=claimed_job)
 
 
 @pytest.mark.asyncio
