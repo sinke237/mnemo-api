@@ -102,14 +102,19 @@ async def _process_redis_job() -> bool:
     job_id = await _dequeue_job_id()
     if job_id:
         processed_successfully, is_retriable = False, False
-        async with AsyncSessionLocal() as db:
-            processed_successfully, is_retriable = await _process_job(db, job_id)
+        try:
+            async with AsyncSessionLocal() as db:
+                processed_successfully, is_retriable = await _process_job(db, job_id)
 
-        if is_retriable:
-            if await _requeue_job_id(job_id):
-                logger.warning("import_job_failed_requeued", job_id=job_id)
+            if is_retriable:
+                if await _requeue_job_id(job_id):
+                    logger.warning("import_job_failed_requeued", job_id=job_id)
 
-        return processed_successfully
+            return processed_successfully
+        except Exception as exc:
+            logger.error("import_job_exception", error=str(exc), job_id=job_id)
+            await _requeue_job_id(job_id)
+            return False
     return False
 
 
