@@ -28,8 +28,8 @@ def test_extract_api_key_prefix_invalid_formats_raise_error(key):
 @pytest.mark.parametrize(
     "key, expected_prefix",
     [
-        ("mnm_live_payload", "mnm_live_"),
-        ("mnm_test_payload", "mnm_test_"),
+        (f"mnm_live_{'a' * 64}", "mnm_live_"),
+        (f"mnm_test_{'a' * 64}", "mnm_test_"),
     ],
 )
 def test_extract_api_key_prefix_valid_formats(key, expected_prefix):

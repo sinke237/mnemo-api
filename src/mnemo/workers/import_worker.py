@@ -64,11 +64,20 @@ async def _claim_db_job(db: AsyncSession) -> ImportJob | None:
 
 async def _process_job(db: AsyncSession, job_id: str) -> bool:
     job = await db.get(ImportJob, job_id, with_for_update=True)
-    if job and job.status == ImportJobStatus.QUEUED.value:
-        await import_service.process_import_job(db, job_id)
+    if not job or job.status != ImportJobStatus.QUEUED.value:
+        return False
+
+    result_job = await import_service.process_import_job(db, job_id)
+
+    if result_job and result_job.status in {
+        ImportJobStatus.COMPLETED.value,
+        ImportJobStatus.FAILED.value,
+    }:
         await db.commit()
         return True
-    return False
+    else:
+        await db.rollback()
+        return False
 
 
 async def _process_redis_job() -> bool:

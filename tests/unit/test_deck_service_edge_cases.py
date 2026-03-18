@@ -17,7 +17,7 @@ async def test_create_deck_case_insensitive_name_conflict(mock_db_session: Async
     deck_name = "My Deck"
     captured_statement = None
 
-    def side_effect(statement):
+    async def side_effect(statement):
         nonlocal captured_statement
         captured_statement = statement
         return MagicMock(scalar_one_or_none=lambda: "existing_deck_id")

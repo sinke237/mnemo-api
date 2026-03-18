@@ -18,7 +18,7 @@ def generate_api_key(is_live: bool = False) -> str:
     Generate an API key with appropriate prefix.
 
     Args:
-        is_live: If True, generates mnm_live_ prefix, else mnm_test_
+        is_live: If True, generates a key with the configured live prefix, else the test prefix.
 
     Returns:
         API key string with prefix

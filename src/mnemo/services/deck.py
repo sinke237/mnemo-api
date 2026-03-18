@@ -150,7 +150,7 @@ async def update_deck(
         await db.flush()
     except IntegrityError as err:
         await db.rollback()
-        raise DeckNameConflictError(f"Deck name already exists: {name}") from err
+        raise DeckNameConflictError(f"Deck name already exists: {deck.name}") from err
     await db.refresh(deck)
     return deck
 

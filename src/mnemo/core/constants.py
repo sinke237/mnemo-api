@@ -102,8 +102,8 @@ DEFAULT_API_KEY_SCOPES = [
 API_KEY_PREFIX = "mnm"
 API_KEY_LIVE_TYPE = "live"
 API_KEY_TEST_TYPE = "test"
-ALLOWED_API_KEY_PREFIXES = {API_KEY_PREFIX}
-ALLOWED_API_KEY_TYPES = {API_KEY_LIVE_TYPE, API_KEY_TEST_TYPE}
+ALLOWED_API_KEY_PREFIXES = frozenset([API_KEY_PREFIX])
+ALLOWED_API_KEY_TYPES = frozenset([API_KEY_LIVE_TYPE, API_KEY_TEST_TYPE])
 
 
 # ── Education Levels ───────────────────────────────────────────────────────────

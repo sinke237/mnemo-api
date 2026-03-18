@@ -7,9 +7,8 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from mnemo.core.constants import ImportJobStatus
+from mnemo.core.constants import ImportJobStatus, ImportMode
 from mnemo.models.import_job import ImportJob
 from mnemo.workers.import_worker import (
     _process_db_job,
@@ -17,12 +16,6 @@ from mnemo.workers.import_worker import (
     _process_redis_job,
     run_worker,
 )
-
-
-@pytest.fixture
-def mock_db_session():
-    """Fixture for a mocked async database session."""
-    return AsyncMock(spec=AsyncSession)
 
 
 @pytest.fixture
@@ -35,8 +28,23 @@ def mock_import_service():
 @pytest.mark.asyncio
 async def test_process_job_success(mock_db_session, mock_import_service):
     job_id = "test_job_id"
-    job = ImportJob(id=job_id, status=ImportJobStatus.QUEUED.value)
+    job = ImportJob(
+        id=job_id,
+        status=ImportJobStatus.QUEUED.value,
+        user_id="test_user",
+        deck_id="test_deck",
+        mode=ImportMode.MERGE.value,
+        file_text="question,answer",
+    )
     mock_db_session.get.return_value = job
+    mock_import_service.process_import_job.return_value = ImportJob(
+        id=job_id,
+        status=ImportJobStatus.COMPLETED.value,
+        user_id="test_user",
+        deck_id="test_deck",
+        mode=ImportMode.MERGE.value,
+        file_text="question,answer",
+    )
 
     result = await _process_job(mock_db_session, job_id)
 
@@ -59,7 +67,14 @@ async def test_process_job_not_found(mock_db_session, mock_import_service):
 @pytest.mark.asyncio
 async def test_process_job_wrong_status(mock_db_session, mock_import_service):
     job_id = "test_job_id"
-    job = ImportJob(id=job_id, status=ImportJobStatus.PROCESSING.value)
+    job = ImportJob(
+        id=job_id,
+        status=ImportJobStatus.PROCESSING.value,
+        user_id="test_user",
+        deck_id="test_deck",
+        mode=ImportMode.MERGE.value,
+        file_text="question,answer",
+    )
     mock_db_session.get.return_value = job
 
     result = await _process_job(mock_db_session, job_id)
@@ -101,7 +116,14 @@ async def test_process_db_job_claims_and_processes(
     mock_session_local, mock_claim, mock_import_service, mock_db_session
 ):
     job_id = "db_job_id"
-    claimed_job = ImportJob(id=job_id, status=ImportJobStatus.QUEUED.value)
+    claimed_job = ImportJob(
+        id=job_id,
+        status=ImportJobStatus.QUEUED.value,
+        user_id="test_user",
+        deck_id="test_deck",
+        mode=ImportMode.MERGE.value,
+        file_text="question,answer",
+    )
     mock_claim.return_value = claimed_job
     mock_session_local.return_value.__aenter__.return_value = mock_db_session
 
