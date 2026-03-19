@@ -1,9 +1,13 @@
+"""Mnemo ORM models."""
+
 from .api_key import APIKey
 from .card_memory_state import CardMemoryState
 from .deck import Deck
 from .flashcard import Flashcard
 from .idempotency_key import IdempotencyKey
 from .import_job import ImportJob
+from .session import Session
+from .session_card import SessionCard
 from .user import User
 
 __all__ = [
@@ -14,4 +18,6 @@ __all__ = [
     "IdempotencyKey",
     "ImportJob",
     "User",
+    "Session",
+    "SessionCard",
 ]

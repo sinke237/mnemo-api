@@ -130,3 +130,30 @@ class CardNotFoundError(CardError):
     """Raised when a card does not exist or is not accessible."""
 
     pass
+
+
+# ── Session Exceptions ───────────────────────────────────────────────────────
+
+
+class SessionError(Exception):
+    """Base exception for session-related errors."""
+
+    pass
+
+
+class SessionNotFoundError(SessionError):
+    """Raised when a session does not exist or is not accessible."""
+
+    pass
+
+
+class SessionAlreadyEndedError(SessionError):
+    """Raised when an action is attempted on a session that has already ended."""
+
+    pass
+
+
+class AnswerTooLongError(SessionError):
+    """Raised when a submitted answer exceeds the maximum allowed length."""
+
+    pass
