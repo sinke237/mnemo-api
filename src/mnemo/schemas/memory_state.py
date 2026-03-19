@@ -27,6 +27,7 @@ class DueCardResponse(BaseModel):
     due_at: datetime
     due_at_local: str | None
     overdue_by: str | None
+    overdue_by_seconds: int | None
     ease_factor: float
 
 

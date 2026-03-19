@@ -63,8 +63,17 @@ class Base(DeclarativeBase):
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """
-    Yield a database session for use in tests or scripts.
-    Ensures the session is closed after use.
+    Yield an AsyncSession without automatic transaction management.
+
+    This function provides a raw database session and is primarily intended for use
+    in scripts or tests where manual control over the transaction lifecycle is
+    required. Unlike get_db(), it does not automatically commit on success or
+    rollback on exceptions.
+
+    For most application-level code, prefer using the get_db() dependency, as it
+    ensures proper transaction handling within the request-response cycle. In
+    tests, you can override dependencies with get_db() to accurately simulate
+    the application's behavior.
     """
     async with AsyncSessionLocal() as session:
         yield session

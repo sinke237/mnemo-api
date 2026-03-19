@@ -5,7 +5,7 @@ API endpoints for card memory states, due cards, and weak spots.
 from datetime import datetime
 
 import pytz
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.api.dependencies import current_user_dep, db_dep
@@ -118,9 +118,12 @@ async def get_due_cards_for_user(
             if memory_state.due_at
             else None
         )
-        overdue_by = (
-            str(datetime.now(pytz.utc) - memory_state.due_at) if memory_state.due_at else None
-        )
+        overdue_by = None
+        overdue_by_seconds = None
+        if memory_state.due_at:
+            delta = datetime.now(pytz.utc) - memory_state.due_at
+            overdue_by = str(delta)
+            overdue_by_seconds = int(delta.total_seconds())
 
         response_cards.append(
             {
@@ -130,6 +133,7 @@ async def get_due_cards_for_user(
                 "due_at": memory_state.due_at,
                 "due_at_local": due_at_local,
                 "overdue_by": overdue_by,
+                "overdue_by_seconds": overdue_by_seconds,
                 "ease_factor": memory_state.ease_factor,
             }
         )
@@ -147,7 +151,7 @@ async def get_due_cards_for_user(
 )
 async def get_weak_spots_for_user(
     user_id: str,
-    limit: int = 10,
+    limit: int = Query(10, ge=1, le=1000),
     db: AsyncSession = db_dep,
     current_user: User = current_user_dep,
 ) -> WeakSpotListResponse:

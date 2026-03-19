@@ -70,7 +70,9 @@ def update_memory_state_after_answer(memory_state: CardMemoryState, score: int) 
         else:
             # The interval from the previous step is stored in interval_days.
             # Fallback to 6 if it's somehow not set.
-            current_interval = memory_state.interval_days or 6
+            current_interval = (
+                6 if memory_state.interval_days is None else memory_state.interval_days
+            )
             memory_state.interval_days = math.ceil(current_interval * memory_state.ease_factor)
 
         memory_state.repetitions += 1
