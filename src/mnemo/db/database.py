@@ -7,7 +7,6 @@ from collections.abc import AsyncGenerator
 from sqlite3 import Connection as SQLite3Connection
 
 from sqlalchemy import event, text
-from sqlalchemy.engine import Connection as SAConnection
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -30,9 +29,7 @@ if url.drivername.startswith("sqlite"):
     )
 
     @event.listens_for(engine.sync_engine, "connect")
-    def set_sqlite_pragma(
-        dbapi_connection: SQLite3Connection, connection_record: SAConnection
-    ) -> None:
+    def set_sqlite_pragma(dbapi_connection: SQLite3Connection, _: object) -> None:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
