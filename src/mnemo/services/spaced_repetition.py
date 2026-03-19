@@ -1,9 +1,5 @@
-"""
-Service for spaced repetition logic (SM-2 algorithm).
-"""
-
 import math
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytz
 from sqlalchemy import Row, select
@@ -28,8 +24,10 @@ async def get_or_create_memory_state(
     if not flashcard_exists:
         return None
 
-    statement = select(CardMemoryState).where(
-        CardMemoryState.card_id == card_id, CardMemoryState.user_id == user_id
+    statement = (
+        select(CardMemoryState)
+        .where(CardMemoryState.card_id == card_id, CardMemoryState.user_id == user_id)
+        .with_for_update()
     )
     result = await db.execute(statement)
     memory_state = result.scalar_one_or_none()
@@ -44,7 +42,6 @@ async def get_or_create_memory_state(
             streak=0,
         )
         db.add(memory_state)
-        await db.commit()
 
     return memory_state
 
@@ -81,10 +78,10 @@ def update_memory_state_after_answer(memory_state: CardMemoryState, score: int) 
 
     # Set the next due date and record the last score.
     if memory_state.interval_days is not None:
-        memory_state.due_at = datetime.utcnow() + timedelta(days=memory_state.interval_days)
-        memory_state.last_score = score
+        memory_state.due_at = datetime.now(UTC) + timedelta(days=memory_state.interval_days)
+    memory_state.last_score = score
 
-        return memory_state
+    return memory_state
 
 
 async def get_due_cards(

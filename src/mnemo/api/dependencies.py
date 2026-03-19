@@ -196,11 +196,8 @@ def require_user_scope(required_scope: PermissionScope) -> Callable[..., Corouti
     """
 
     async def _require(
-        credentials: HTTPAuthorizationCredentials | None = auth_header_dep,
-        db: AsyncSession = db_dep,
+        user: User = current_user_dep,
     ) -> None:
-        # Validate token and user existence (propagates 401/404 as needed)
-        user = await get_current_user_from_token(credentials, db)
 
         # At this point the token is syntactically valid and the user exists.
         # Use the attached `token_scopes` attribute (transient) to enforce

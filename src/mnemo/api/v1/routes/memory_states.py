@@ -39,17 +39,21 @@ async def get_card_memory_state(
     current_user: User = current_user_dep,
 ) -> CardMemoryStateResponse:
     """Get the current memory state for a user and card pair."""
-    memory_state = await get_or_create_memory_state(db, card_id=card_id, user_id=current_user.id)
-    if not memory_state:
-        raise HTTPException(
-            status_code=HTTPStatusCode.NOT_FOUND,
-            detail=ErrorCode.CARD_NOT_FOUND,
+    async with db.begin_nested():
+        memory_state = await get_or_create_memory_state(
+            db, card_id=card_id, user_id=current_user.id
         )
+        if not memory_state:
+            raise HTTPException(
+                status_code=HTTPStatusCode.NOT_FOUND,
+                detail=ErrorCode.CARD_NOT_FOUND,
+            )
 
     due_at_local = (
         to_local_time(memory_state.due_at, current_user.timezone) if memory_state.due_at else None
     )
-    response = CardMemoryStateResponse.from_orm(memory_state)
+
+    response = CardMemoryStateResponse.model_validate(memory_state)
     response.due_at_local = due_at_local
     return response
 
@@ -66,19 +70,23 @@ async def answer_card(
     current_user: User = current_user_dep,
 ) -> CardMemoryStateResponse:
     """Submit an answer for a card and update its memory state."""
-    memory_state = await get_or_create_memory_state(db, card_id=card_id, user_id=current_user.id)
-    if not memory_state:
-        raise HTTPException(
-            status_code=HTTPStatusCode.NOT_FOUND,
-            detail=ErrorCode.CARD_NOT_FOUND,
+    async with db.begin_nested():
+        memory_state = await get_or_create_memory_state(
+            db, card_id=card_id, user_id=current_user.id
         )
+        if not memory_state:
+            raise HTTPException(
+                status_code=HTTPStatusCode.NOT_FOUND,
+                detail=ErrorCode.CARD_NOT_FOUND,
+            )
 
-    updated_state = update_memory_state_after_answer(memory_state, answer.score)
+        updated_state = update_memory_state_after_answer(memory_state, answer.score)
 
     due_at_local = (
         to_local_time(updated_state.due_at, current_user.timezone) if updated_state.due_at else None
     )
-    response = CardMemoryStateResponse.from_orm(updated_state)
+
+    response = CardMemoryStateResponse.model_validate(updated_state)
     response.due_at_local = due_at_local
 
     return response
@@ -113,18 +121,23 @@ async def get_due_cards_for_user(
         overdue_by = (
             str(datetime.now(pytz.utc) - memory_state.due_at) if memory_state.due_at else None
         )
-        card_data = {
-            "id": flashcard.id,
-            "deck_id": flashcard.deck_id,
-            "question": flashcard.question,
-            "due_at": memory_state.due_at,
-            "due_at_local": due_at_local,
-            "overdue_by": overdue_by,
-            "ease_factor": memory_state.ease_factor,
-        }
-        response_cards.append(card_data)
 
-    return DueCardListResponse(due_count=len(response_cards), cards=response_cards)
+        response_cards.append(
+            {
+                "id": flashcard.id,
+                "deck_id": flashcard.deck_id,
+                "question": flashcard.question,
+                "due_at": memory_state.due_at,
+                "due_at_local": due_at_local,
+                "overdue_by": overdue_by,
+                "ease_factor": memory_state.ease_factor,
+            }
+        )
+
+    return DueCardListResponse(
+        due_count=len(response_cards),
+        cards=response_cards,
+    )
 
 
 @router.get(
@@ -149,14 +162,18 @@ async def get_weak_spots_for_user(
 
     response_cards = []
     for memory_state, flashcard in weak_spots:
-        card_data = {
-            "id": flashcard.id,
-            "deck_id": flashcard.deck_id,
-            "question": flashcard.question,
-            "ease_factor": memory_state.ease_factor,
-            "last_score": memory_state.last_score,
-            "repetitions": memory_state.repetitions,
-        }
-        response_cards.append(card_data)
+        response_cards.append(
+            {
+                "id": flashcard.id,
+                "deck_id": flashcard.deck_id,
+                "question": flashcard.question,
+                "ease_factor": memory_state.ease_factor,
+                "last_score": memory_state.last_score,
+                "repetitions": memory_state.repetitions,
+            }
+        )
 
-    return WeakSpotListResponse(count=len(response_cards), cards=response_cards)
+    return WeakSpotListResponse(
+        count=len(response_cards),
+        cards=response_cards,
+    )

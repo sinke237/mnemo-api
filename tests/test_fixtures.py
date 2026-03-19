@@ -12,35 +12,49 @@ from mnemo.main import app
 from mnemo.models import User
 
 
-@pytest.fixture
-async def db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Maintains a single database session per test, and overrides the app's db dependency.
-    This is the key to sharing a transaction between test and app.
-    """
-    connection = await engine.connect()
-    transaction = await connection.begin()
-    session = AsyncSession(bind=connection, expire_on_commit=False)
-
-    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
-        yield session
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    yield session
-
-    await session.close()
-    await transaction.rollback()
-    await connection.close()
-    del app.dependency_overrides[get_db]
-
-
-# Create all tables before each test (for in-memory SQLite)
 @pytest.fixture(scope="function", autouse=True)
 async def create_test_database():
+    """Drop and recreate all tables before each test."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+
+
+@pytest.fixture
+async def db(create_test_database) -> AsyncGenerator[AsyncSession, None]:
+    """
+    Establishes a single transaction for the duration of a test.
+
+    A new session is created for each request, but all sessions share the same
+    underlying database connection and transaction. This allows the test to
+    make assertions about the state of the database across multiple API calls,
+    while ensuring that each request has its own isolated session to prevent
+    concurrent access errors.
+
+    At the end of the test, the transaction is rolled back, leaving the database
+    in a clean state.
+    """
+    connection = await engine.connect()
+    transaction = await connection.begin()
+
+    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        """Dependency override for get_db that provides a session within the test's transaction."""
+        session = AsyncSession(bind=connection, expire_on_commit=False)
+        try:
+            yield session
+        finally:
+            await session.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    # Provide a session for the test function itself, using the same connection.
+    test_session = AsyncSession(bind=connection, expire_on_commit=False)
+    yield test_session
+    await test_session.close()
+
+    await transaction.rollback()
+    await connection.close()
+    del app.dependency_overrides[get_db]
 
 
 @pytest.fixture
@@ -57,7 +71,9 @@ def authenticated_user() -> User:
 
 
 @pytest.fixture
-async def client(monkeypatch: pytest.MonkeyPatch, authenticated_user: User) -> AsyncClient:
+async def client(
+    db: AsyncSession, monkeypatch: pytest.MonkeyPatch, authenticated_user: User
+) -> AsyncClient:
     """
     Async HTTP client pointed at the FastAPI app.
     Does NOT require a running server — uses ASGI transport directly.

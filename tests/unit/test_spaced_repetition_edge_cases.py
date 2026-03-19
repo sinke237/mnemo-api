@@ -2,23 +2,8 @@
 Unit tests for edge cases in the SM-2 spaced repetition service.
 """
 
-import pytest
-
 from mnemo.models import CardMemoryState
 from mnemo.services.spaced_repetition import update_memory_state_after_answer
-
-
-@pytest.fixture
-def new_memory_state() -> CardMemoryState:
-    """Returns a new CardMemoryState with default values."""
-    return CardMemoryState(
-        card_id="crd_123",
-        user_id="usr_123",
-        ease_factor=2.5,
-        repetitions=0,
-        interval_days=0,
-        streak=0,
-    )
 
 
 def test_sm2_lowest_passing_score(new_memory_state: CardMemoryState):

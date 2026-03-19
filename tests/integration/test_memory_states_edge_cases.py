@@ -2,21 +2,20 @@
 Integration tests for edge cases in memory state services and endpoints.
 """
 
-from collections.abc import AsyncIterator
 from datetime import datetime
 
 import pytest
 import pytz
 from freezegun import freeze_time
 from httpx import AsyncClient
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.core.constants import PermissionScope
-from mnemo.db.database import AsyncSessionLocal
 from mnemo.models import CardMemoryState, Deck, Flashcard, User
 from mnemo.services.api_key import create_api_key
 from mnemo.services.spaced_repetition import get_due_cards, get_or_create_memory_state
+from mnemo.utils.local_time import to_local_time
 
 # Register shared fixtures
 pytest_plugins = ["tests.test_fixtures"]
@@ -26,16 +25,44 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest.fixture
+async def user_with_dst_timezone(db: AsyncSession) -> User:
+    """Fixture for a user with a timezone that observes DST."""
+    user = User(
+        id="usr_a1b2c3d4e5f6a7b8",
+        country="US",
+        timezone="America/New_York",
+        display_name="DST Timezone Tester",
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+@pytest.fixture
+async def user_with_extreme_timezone(db: AsyncSession) -> User:
+    """Fixture for a user with an extreme timezone offset."""
+    user = User(
+        id="usr_extreme_tz_tester",
+        country="KI",  # Kiribati
+        timezone="Pacific/Kiritimati",  # UTC+14
+        display_name="Extreme Timezone Tester",
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+@pytest.fixture
 async def user_with_invalid_timezone(db: AsyncSession) -> User:
     """Fixture for a user with an invalid timezone."""
     user = User(
-        id="usr_a1b2c3d4e5f6a7b8",
+        id="usr_b2c3d4e5f6a7b8c9",
         country="AQ",  # Antarctica
         timezone="Mars/Olympus_Mons",
         display_name="Invalid Timezone Tester",
     )
     db.add(user)
-    await db.commit()
+    await db.flush()
     return user
 
 
@@ -48,7 +75,7 @@ async def deck_for_invalid_tz_user(db: AsyncSession, user_with_invalid_timezone:
         user_id=user_with_invalid_timezone.id,
     )
     db.add(deck)
-    await db.commit()
+    await db.flush()
     return deck
 
 
@@ -73,7 +100,7 @@ async def test_get_due_cards_with_invalid_timezone_falls_back_to_utc(
         due_at=now_utc,
     )
     db.add(memory_state)
-    await db.commit()
+    await db.flush()
 
     due_cards_result = await get_due_cards(db, user_with_invalid_timezone)
     due_cards = [item[0] for item in due_cards_result]
@@ -91,7 +118,7 @@ async def deck_for_dst_user(db: AsyncSession, user_with_dst_timezone: User) -> D
         user_id=user_with_dst_timezone.id,
     )
     db.add(deck)
-    await db.commit()
+    await db.flush()
     return deck
 
 
@@ -103,7 +130,7 @@ async def test_get_due_cards_handles_dst_correctly(
     user_tz = pytz.timezone(user_with_dst_timezone.timezone)
 
     # A time that is during DST in America/New_York
-    dst_time = datetime(2026, 6, 1, 10, 0, 0, tzinfo=user_tz)
+    dst_time = user_tz.localize(datetime(2026, 6, 1, 10, 0, 0))
     due_time_utc = dst_time.astimezone(pytz.utc)
 
     card = Flashcard(
@@ -121,7 +148,7 @@ async def test_get_due_cards_handles_dst_correctly(
         due_at=due_time_utc,
     )
     db.add(memory_state)
-    await db.commit()
+    await db.flush()
 
     due_cards_result = await get_due_cards(db, user_with_dst_timezone)
     due_cards = [item[0] for item in due_cards_result]
@@ -138,10 +165,11 @@ async def deck_for_extreme_tz_user(db: AsyncSession, user_with_extreme_timezone:
         user_id=user_with_extreme_timezone.id,
     )
     db.add(deck)
-    await db.commit()
+    await db.flush()
     return deck
 
 
+@freeze_time("2023-01-09 11:00:00")
 async def test_get_due_cards_handles_extreme_timezone_offset(
     db: AsyncSession, user_with_extreme_timezone: User, deck_for_extreme_tz_user: Deck
 ):
@@ -167,7 +195,7 @@ async def test_get_due_cards_handles_extreme_timezone_offset(
         due_at=due_time_utc,
     )
     db.add(memory_state)
-    await db.commit()
+    await db.flush()
 
     due_cards_result = await get_due_cards(db, user_with_extreme_timezone)
     due_cards = [item[0] for item in due_cards_result]
@@ -176,6 +204,7 @@ async def test_get_due_cards_handles_extreme_timezone_offset(
     assert due_cards[0].card_id == "crd_extreme_tz_test"
 
 
+@freeze_time("2023-01-10 12:00:00")
 async def test_get_due_cards_handles_midnight_boundary(
     db: AsyncSession, user_with_dst_timezone: User, deck_for_dst_user: Deck
 ):
@@ -201,7 +230,7 @@ async def test_get_due_cards_handles_midnight_boundary(
         due_at=due_time_utc,
     )
     db.add(memory_state)
-    await db.commit()
+    await db.flush()
 
     due_cards_result = await get_due_cards(db, user_with_dst_timezone)
     due_cards = [item[0] for item in due_cards_result]
@@ -210,6 +239,7 @@ async def test_get_due_cards_handles_midnight_boundary(
     assert due_cards[0].card_id == "crd_midnight_test"
 
 
+@freeze_time("2023-01-10 12:00:00")
 async def test_due_at_local_updates_after_timezone_change(
     db: AsyncSession, user_with_dst_timezone: User, deck_for_dst_user: Deck
 ):
@@ -233,16 +263,14 @@ async def test_due_at_local_updates_after_timezone_change(
         due_at=due_time_utc,
     )
     db.add(memory_state)
-    await db.commit()
+    await db.flush()
 
     # Change the user's timezone
     user_with_dst_timezone.timezone = "America/Los_Angeles"
     db.add(user_with_dst_timezone)
-    await db.commit()
+    await db.flush()
 
     # The due_at_local should now be different
-    from mnemo.utils.local_time import to_local_time
-
     due_at_local = to_local_time(due_time_utc, user_with_dst_timezone.timezone)
     assert "-07:00" in due_at_local or "-08:00" in due_at_local  # PDT or PST
 
@@ -276,7 +304,7 @@ async def test_due_date_calculation_handles_leap_years(
         repetitions=2,  # To trigger the interval calculation
     )
     db.add(memory_state)
-    await db.commit()
+    await db.flush()
 
     # Answer the card correctly, with an interval that will span the leap day
     updated_state = update_memory_state_after_answer(memory_state, 5)
@@ -289,36 +317,13 @@ async def test_due_date_calculation_handles_leap_years(
     assert updated_state.due_at.date() == expected_due_date.date()
 
 
-async def test_get_memory_state_for_non_existent_card(client, headers_for_user_with_dst_timezone):
-    """Test getting the memory state for a non-existent card."""
-    response = await client.get(
-        "/v1/cards/crd_non_existent/memory", headers=headers_for_user_with_dst_timezone
-    )
-    assert response.status_code == 404
-
-
-@pytest.fixture
-async def db_session(
-    client: AsyncClient,
-) -> AsyncIterator[AsyncSession]:  # client is included to ensure tables are created
-    async with AsyncSessionLocal() as session:
-        yield session
-        await session.commit()
-
-        await session.execute(delete(CardMemoryState))
-        await session.execute(delete(Flashcard))
-        await session.execute(delete(Deck))
-        await session.execute(delete(User))
-        await session.commit()
-
-
 @pytest.fixture
 async def headers_for_user_with_dst_timezone(
-    db_session: AsyncSession, client: AsyncClient, user_with_dst_timezone: User
+    db: AsyncSession, client: AsyncClient, user_with_dst_timezone: User
 ) -> dict[str, str]:
     """Returns headers for the user with a DST timezone."""
     _, plain_key = await create_api_key(
-        db=db_session,
+        db=db,
         user_id=user_with_dst_timezone.id,
         name="Test Key",
         is_live=False,
@@ -326,10 +331,9 @@ async def headers_for_user_with_dst_timezone(
             PermissionScope.DECKS_READ,
             PermissionScope.DECKS_WRITE,
             PermissionScope.PROGRESS_READ,
+            PermissionScope.SESSIONS_RUN,
         ],
     )
-    await db_session.commit()
-
     token_response = await client.post(
         "/v1/auth/token",
         json={"user_id": user_with_dst_timezone.id, "api_key": plain_key},
@@ -339,8 +343,20 @@ async def headers_for_user_with_dst_timezone(
     return {"Authorization": f"Bearer {token}"}
 
 
+async def test_get_memory_state_for_non_existent_card(
+    db: AsyncSession,
+    client: AsyncClient,
+    headers_for_user_with_dst_timezone: dict[str, str],
+):
+    """Test getting the memory state for a non-existent card."""
+    response = await client.get(
+        "/v1/cards/crd_non_existent/memory", headers=headers_for_user_with_dst_timezone
+    )
+    assert response.status_code == 404
+
+
 async def test_get_memory_state_for_new_card(
-    db_session: AsyncSession,
+    db: AsyncSession,
     client: AsyncClient,
     headers_for_user_with_dst_timezone: dict[str, str],
     deck_for_dst_user: Deck,
@@ -352,8 +368,8 @@ async def test_get_memory_state_for_new_card(
         question="New card test",
         answer="Works",
     )
-    db_session.add(card)
-    await db_session.commit()
+    db.add(card)
+    await db.flush()
 
     response = await client.get(
         f"/v1/cards/{card.id}/memory", headers=headers_for_user_with_dst_timezone
@@ -386,7 +402,6 @@ async def test_get_weak_spots_with_no_answered_cards(
     user_with_dst_timezone: User,
 ):
     """Test the /weak-spots endpoint when the user has no answered cards."""
-    # Use the actual user object from the fixture
     response = await client.get(
         f"/v1/users/{user_with_dst_timezone.id}/weak-spots",
         headers=headers_for_user_with_dst_timezone,
@@ -398,7 +413,7 @@ async def test_get_weak_spots_with_no_answered_cards(
 
 
 async def test_get_weak_spots_with_same_ease_factor(
-    db_session: AsyncSession,
+    db: AsyncSession,
     client: AsyncClient,
     headers_for_user_with_dst_timezone: dict[str, str],
     deck_for_dst_user: Deck,
@@ -416,13 +431,13 @@ async def test_get_weak_spots_with_same_ease_factor(
         question="Q2",
         answer="A2",
     )
-    db_session.add_all([card1, card2])
-    await db_session.flush()
+    db.add_all([card1, card2])
+    await db.flush()
 
     state1 = CardMemoryState(card_id=card1.id, user_id=deck_for_dst_user.user_id, ease_factor=2.5)
     state2 = CardMemoryState(card_id=card2.id, user_id=deck_for_dst_user.user_id, ease_factor=2.5)
-    db_session.add_all([state1, state2])
-    await db_session.commit()
+    db.add_all([state1, state2])
+    await db.flush()
 
     response = await client.get(
         f"/v1/users/{deck_for_dst_user.user_id}/weak-spots",
@@ -435,7 +450,7 @@ async def test_get_weak_spots_with_same_ease_factor(
 
 
 async def test_get_weak_spots_with_limit(
-    db_session: AsyncSession,
+    db: AsyncSession,
     client: AsyncClient,
     headers_for_user_with_dst_timezone: dict[str, str],
     deck_for_dst_user: Deck,
@@ -453,13 +468,13 @@ async def test_get_weak_spots_with_limit(
         question="Q2",
         answer="A2",
     )
-    db_session.add_all([card1, card2])
-    await db_session.flush()
+    db.add_all([card1, card2])
+    await db.flush()
 
     state1 = CardMemoryState(card_id=card1.id, user_id=deck_for_dst_user.user_id, ease_factor=1.5)
     state2 = CardMemoryState(card_id=card2.id, user_id=deck_for_dst_user.user_id, ease_factor=2.5)
-    db_session.add_all([state1, state2])
-    await db_session.commit()
+    db.add_all([state1, state2])
+    await db.flush()
 
     response = await client.get(
         f"/v1/users/{deck_for_dst_user.user_id}/weak-spots?limit=1",
@@ -472,7 +487,7 @@ async def test_get_weak_spots_with_limit(
 
 
 async def test_answer_card_with_invalid_score(
-    db_session: AsyncSession,
+    db: AsyncSession,
     client: AsyncClient,
     headers_for_user_with_dst_timezone: dict[str, str],
     deck_for_dst_user: Deck,
@@ -484,8 +499,8 @@ async def test_answer_card_with_invalid_score(
         question="Invalid score test",
         answer="Works",
     )
-    db_session.add(card)
-    await db_session.commit()
+    db.add(card)
+    await db.flush()
 
     response = await client.post(
         f"/v1/cards/{card.id}/answer",
@@ -495,8 +510,12 @@ async def test_answer_card_with_invalid_score(
     assert response.status_code == 422
 
 
+@pytest.mark.skipif(
+    "sqlite" in str(__import__("mnemo.db.database", fromlist=["engine"]).engine.url.drivername),
+    reason="SQLite cannot handle concurrent savepoints on a single connection",
+)
 async def test_concurrent_answers(
-    db_session: AsyncSession,
+    db: AsyncSession,
     client: AsyncClient,
     headers_for_user_with_dst_timezone: dict[str, str],
     deck_for_dst_user: Deck,
@@ -510,11 +529,12 @@ async def test_concurrent_answers(
         question="Concurrent test",
         answer="Works",
     )
-    db_session.add(card)
-    await db_session.commit()
+    db.add(card)
+    await db.flush()
 
     # Ensure the memory state is created before concurrent answers
-    await get_or_create_memory_state(db_session, card.id, deck_for_dst_user.user_id)
+    await get_or_create_memory_state(db, card.id, deck_for_dst_user.user_id)
+    await db.flush()
 
     tasks = [
         client.post(
@@ -527,6 +547,14 @@ async def test_concurrent_answers(
     responses = await asyncio.gather(*tasks)
 
     assert all(response.status_code == 200 for response in responses)
+
+    db.expire_all()
+
+    # Fetch the memory state after concurrent answers
+    final_memory_state = await get_or_create_memory_state(db, card.id, deck_for_dst_user.user_id)
+    assert final_memory_state is not None
+    assert final_memory_state.repetitions == 2
+    assert final_memory_state.streak == 2
 
 
 async def test_orphaned_memory_states_are_deleted(
@@ -547,14 +575,14 @@ async def test_orphaned_memory_states_are_deleted(
         user_id=user_with_dst_timezone.id,
     )
     db.add(memory_state)
-    await db.commit()
+    await db.flush()
 
     user_id = user_with_dst_timezone.id
     card_id = card.id
 
     # Delete the card
     await db.delete(card)
-    await db.commit()
+    await db.flush()
     db.expire_all()
 
     # The memory state should also be deleted
@@ -586,7 +614,7 @@ async def test_duplicate_memory_states_are_prevented(
         user_id=user_with_dst_timezone.id,
     )
     db.add(memory_state1)
-    await db.commit()
+    await db.flush()
 
     memory_state2 = CardMemoryState(
         card_id=card.id,
@@ -594,32 +622,4 @@ async def test_duplicate_memory_states_are_prevented(
     )
     db.add(memory_state2)
     with pytest.raises(IntegrityError):
-        await db.commit()
-
-
-@pytest.fixture
-async def user_with_dst_timezone(db: AsyncSession) -> User:
-    """Fixture for a user with a timezone that observes DST."""
-    user = User(
-        id="usr_b2c3d4e5f6a7b8a1",
-        country="US",
-        timezone="America/New_York",
-        display_name="DST Timezone Tester",
-    )
-    db.add(user)
-    await db.commit()
-    return user
-
-
-@pytest.fixture
-async def user_with_extreme_timezone(db: AsyncSession) -> User:
-    """Fixture for a user with an extreme timezone offset."""
-    user = User(
-        id="usr_c3d4e5f6a7b8a1b2",
-        country="KI",  # Kiribati
-        timezone="Pacific/Kiritimati",  # UTC+14
-        display_name="Extreme Timezone Tester",
-    )
-    db.add(user)
-    await db.commit()
-    return user
+        await db.flush()

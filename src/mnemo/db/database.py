@@ -4,8 +4,10 @@ Uses SQLAlchemy async engine with asyncpg driver.
 """
 
 from collections.abc import AsyncGenerator
+from sqlite3 import Connection as SQLite3Connection
 
-from sqlalchemy import text
+from sqlalchemy import event, text
+from sqlalchemy.engine import Connection as SAConnection
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -26,6 +28,15 @@ if url.drivername.startswith("sqlite"):
         connect_args={"check_same_thread": False},
         poolclass=StaticPool if url.database == ":memory:" else None,
     )
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def set_sqlite_pragma(
+        dbapi_connection: SQLite3Connection, connection_record: SAConnection
+    ) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 else:
     engine = create_async_engine(
         url,
@@ -38,7 +49,6 @@ else:
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,
-    join_transaction_mode="create_savepoint",
     expire_on_commit=False,
     autocommit=False,
     autoflush=False,

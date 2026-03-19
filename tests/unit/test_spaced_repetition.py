@@ -2,7 +2,7 @@
 Unit tests for the SM-2 spaced repetition service.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
@@ -31,7 +31,7 @@ def test_sm2_correct_answer_first_review(new_memory_state: CardMemoryState):
     assert state.streak == 1
     assert state.ease_factor > 2.5
     assert state.due_at is not None
-    assert state.due_at > datetime.utcnow()
+    assert state.due_at > datetime.now(UTC)
 
 
 def test_sm2_correct_answer_second_review(new_memory_state: CardMemoryState):

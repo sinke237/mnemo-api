@@ -1,4 +1,6 @@
-"""Pydantic schemas for card memory states."""
+"""
+Pydantic schemas for card memory states.
+"""
 
 from datetime import datetime
 
@@ -23,7 +25,7 @@ class DueCardResponse(BaseModel):
     deck_id: str
     question: str
     due_at: datetime
-    due_at_local: str
+    due_at_local: str | None
     overdue_by: str | None
     ease_factor: float
 
