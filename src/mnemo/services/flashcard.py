@@ -8,12 +8,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.core.constants import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from mnemo.core.exceptions import CardNotFoundError, DeckNotFoundError
-from mnemo.models.card_memory_state import CardMemoryState
 from mnemo.models.deck import Deck
 from mnemo.models.flashcard import Flashcard
 from mnemo.services.utils import pagination_meta
@@ -159,7 +158,6 @@ async def delete_card(db: AsyncSession, user_id: str, card_id: str) -> None:
     if deck is None:
         raise DeckNotFoundError(f"Deck not found: {card.deck_id}")
 
-    await db.execute(delete(CardMemoryState).where(CardMemoryState.card_id == card.id))
     await db.delete(card)
 
     deck.card_count = max(0, deck.card_count - 1)

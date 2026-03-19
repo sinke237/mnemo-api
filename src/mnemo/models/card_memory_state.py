@@ -7,7 +7,7 @@ Per spec section 05: Card Memory State.
 from datetime import datetime
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from mnemo.core.constants import DEFAULT_EASE_FACTOR
@@ -39,6 +39,8 @@ class CardMemoryState(Base):  # type: ignore[misc]
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+
+    card = relationship("Flashcard", back_populates="memory_states")
 
     def __repr__(self) -> str:
         return f"<CardMemoryState(card_id={self.card_id}, user_id={self.user_id})>"

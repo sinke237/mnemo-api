@@ -4,8 +4,10 @@ Uses SQLAlchemy async engine with asyncpg driver.
 """
 
 from collections.abc import AsyncGenerator
+from sqlite3 import Connection as SQLite3Connection
 
-from sqlalchemy import text
+from sqlalchemy import event, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import StaticPool
@@ -15,35 +17,35 @@ from mnemo.core.config import get_settings
 settings = get_settings()
 
 
-if settings.database_url.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
-    if ":memory:" in settings.database_url:
-        # Use StaticPool for in-memory SQLite so tables persist across connections.
-        engine = create_async_engine(
-            settings.database_url,
-            echo=settings.is_development,
-            connect_args=connect_args,
-            poolclass=StaticPool,
-        )
-    else:
-        engine = create_async_engine(
-            settings.database_url,
-            echo=settings.is_development,
-            connect_args=connect_args,
-        )
+url = make_url(settings.database_url)
+
+if url.drivername.startswith("sqlite"):
+    url = url.set(drivername="sqlite+aiosqlite")
+    engine = create_async_engine(
+        url,
+        echo=settings.is_development,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool if url.database == ":memory:" else None,
+    )
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def set_sqlite_pragma(dbapi_connection: SQLite3Connection, _: object) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 else:
     engine = create_async_engine(
-        settings.database_url,
-        echo=settings.is_development,  # log SQL in dev only
+        url,
+        echo=settings.is_development,
         pool_size=10,
         max_overflow=20,
-        pool_pre_ping=True,  # verify connections before use
+        pool_pre_ping=True,
     )
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,
-    join_transaction_mode="create_savepoint",
     expire_on_commit=False,
     autocommit=False,
     autoflush=False,
@@ -54,6 +56,24 @@ class Base(DeclarativeBase):
     """Base class for all SQLAlchemy models."""
 
     pass
+
+
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Yield an AsyncSession without automatic transaction management.
+
+    This function provides a raw database session and is primarily intended for use
+    in scripts or tests where manual control over the transaction lifecycle is
+    required. Unlike get_db(), it does not automatically commit on success or
+    rollback on exceptions.
+
+    For most application-level code, prefer using the get_db() dependency, as it
+    ensures proper transaction handling within the request-response cycle. In
+    tests, you can override dependencies with get_db() to accurately simulate
+    the application's behavior.
+    """
+    async with AsyncSessionLocal() as session:
+        yield session
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

@@ -40,6 +40,9 @@ class Flashcard(Base):  # type: ignore[misc]
     )
 
     deck = relationship("Deck", back_populates="cards")
+    memory_states = relationship(
+        "CardMemoryState", back_populates="card", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Flashcard(id={self.id}, deck_id={self.deck_id})>"
