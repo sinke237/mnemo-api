@@ -1,7 +1,7 @@
 """Add study_plans table
 
 Revision ID: d1e2f3a4b5c6
-Revises: f2c1b3a4d5e6
+Revises: b3c4d5e6f7a8
 Create Date: 2026-03-21 00:00:00.000000
 
 """

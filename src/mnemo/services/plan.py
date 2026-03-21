@@ -156,6 +156,9 @@ async def create_plan(
         daily_minutes=daily_minutes,
         schedule=schedule,
     )
+    # Set created_at explicitly to avoid DB-second-resolution ties when
+    # multiple plans are created rapidly in the same test/request flow.
+    plan.created_at = datetime.now(UTC)
     db.add(plan)
     await db.flush()
     await db.refresh(plan)

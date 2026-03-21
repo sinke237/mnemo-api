@@ -26,7 +26,9 @@ class PlanCreate(BaseModel):
     deck_id: str
     goal: str | None = None
     days: int = Field(..., ge=1, le=365, description="Days available. Min: 1, max: 365.")
-    daily_minutes: int = Field(default=30, ge=1, description="Minutes available per day.")
+    daily_minutes: int = Field(
+        default=30, ge=1, le=1440, description="Minutes available per day. Min: 1, max: 1440."
+    )
 
 
 class PlanResponse(BaseModel):

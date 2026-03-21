@@ -74,8 +74,11 @@ async def _get_token(client: AsyncClient, user_id: str, api_key: str) -> str:
 async def plan_client(db_session: AsyncSession) -> AsyncClient:
     """
     HTTP client backed by the real app.
-    `db_session` already overrides `get_db`; this fixture only wraps the
-    transport — no duplicate dependency manipulation.
+
+    Note: the `db_session` fixture (used here) overrides the application
+    dependency `get_db` — see `tests/test_fixtures.py` for the override.
+    This fixture (`plan_client`) merely wraps the ASGI transport and does
+    not change DB dependency wiring.
     """
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -395,3 +398,34 @@ async def test_generate_plan_days_validation(
             headers=headers,
         )
         assert resp.status_code == 422, f"Expected 422 for days={bad_days}, got {resp.status_code}"
+
+
+@pytest.mark.asyncio
+async def test_generate_plan_days_boundaries(
+    plan_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """days at the inclusive boundaries 1 and 365 must be accepted (201)."""
+    user, api_key = await _make_user_with_key(
+        db_session,
+        country="US",
+        timezone="America/New_York",
+        scopes=[PermissionScope.SESSIONS_RUN],
+    )
+    token = await _get_token(plan_client, user.id, api_key)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    deck = await create_deck(
+        db=db_session, user_id=user.id, name="Boundary Deck", description=None, tags=[]
+    )
+    deck.card_count = 10
+    await db_session.commit()
+
+    for valid_days in (1, 365):
+        resp = await plan_client.post(
+            f"/v1/users/{user.id}/plan",
+            json={"deck_id": deck.id, "days": valid_days, "daily_minutes": 30},
+            headers=headers,
+        )
+        assert (
+            resp.status_code == 201
+        ), f"Expected 201 for days={valid_days}, got {resp.status_code}"

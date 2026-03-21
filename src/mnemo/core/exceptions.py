@@ -150,14 +150,14 @@ class SessionNotFoundError(SessionError):
 # ── Plan Exceptions ───────────────────────────────────────────────────────────
 
 
-class PlanNotFoundError(Exception):
-    """Raised when no active study plan exists for a user."""
+class PlanError(Exception):
+    """Base exception for study plan errors."""
 
     pass
 
 
-class PlanError(Exception):
-    """Base exception for study plan errors."""
+class PlanNotFoundError(PlanError):
+    """Raised when no active study plan exists for a user."""
 
     pass
 
