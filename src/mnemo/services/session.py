@@ -57,10 +57,10 @@ class SessionService:
 
         card_query = select(Flashcard).where(Flashcard.deck_id == deck.id)
 
-        # Build a single join condition for CardMemoryState referencing the
-        # current user. Choose join type based on `due_only` so we can
-        # optionally filter for due cards only without adding conflicting
-        # duplicate joins.
+        # Build a join condition for CardMemoryState only when it is actually
+        # needed: inner join when filtering by due date, outer join when
+        # ordering by ease_factor (focus_weak). When neither flag is set no
+        # join is required and card_query is left unchanged.
         join_condition = and_(
             CardMemoryState.card_id == Flashcard.id,
             CardMemoryState.user_id == self.user.id,
@@ -71,8 +71,8 @@ class SessionService:
             card_query = card_query.join(CardMemoryState, join_condition).where(
                 CardMemoryState.due_at <= datetime.utcnow(),
             )
-        else:
-            # Outer join so cards without memory rows are included
+        elif session_data.focus_weak:
+            # Outer join so cards without memory rows are still included
             card_query = card_query.outerjoin(CardMemoryState, join_condition)
 
         # Ordering: prefer weak cards by ease_factor when requested,
@@ -170,6 +170,10 @@ class SessionService:
             raise SessionNotFoundError()
         if session.status == SessionStatus.ENDED:
             raise SessionAlreadyEndedError()
+        if session.expires_at is not None and session.expires_at < datetime.utcnow():
+            session.status = SessionStatus.ENDED
+            await self.db.flush()
+            raise SessionAlreadyEndedError()
         if len(answer_data.answer) > 2000:
             raise AnswerTooLongError()
 
@@ -200,6 +204,8 @@ class SessionService:
         if memory_state:
             update_memory_state_after_answer(memory_state, score)
 
+        await self.db.flush()
+
         next_result = await self.db.execute(
             select(SessionCard)
             .options(joinedload(SessionCard.card))
@@ -229,8 +235,6 @@ class SessionService:
             session.status = SessionStatus.ENDED
             session.ended_at = cast(Any, datetime.utcnow())
 
-        await self.db.flush()
-
         return AnswerResult(
             score=score,
             is_correct=is_correct,
@@ -253,6 +257,10 @@ class SessionService:
         if not session:
             raise SessionNotFoundError()
         if session.status == SessionStatus.ENDED:
+            raise SessionAlreadyEndedError()
+        if session.expires_at is not None and session.expires_at < datetime.utcnow():
+            session.status = SessionStatus.ENDED
+            await self.db.flush()
             raise SessionAlreadyEndedError()
 
         current_result = await self.db.execute(
@@ -322,6 +330,14 @@ class SessionService:
 
         if not session:
             raise SessionNotFoundError()
+        if (
+            session.expires_at is not None
+            and session.expires_at < datetime.utcnow()
+            and session.status != SessionStatus.ENDED
+        ):
+            session.status = SessionStatus.ENDED
+            await self.db.flush()
+            raise SessionAlreadyEndedError()
 
         cards_done_result = await self.db.execute(
             select(func.count()).where(

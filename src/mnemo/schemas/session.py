@@ -25,7 +25,7 @@ class SessionStart(BaseModel):
     card_limit: int | None = Field(None, ge=1, le=100)
     due_only: bool = False
     focus_weak: bool = False
-    time_limit_s: int | None = Field(None, ge=60)
+    time_limit_s: int | None = Field(None, ge=60, examples=[3600])
 
 
 class Session(BaseModel):
