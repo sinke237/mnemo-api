@@ -124,8 +124,18 @@ async def create_plan(
 
     total_cards = deck.card_count or 0
 
+    if days <= 0:
+        raise ValueError(f"days must be a positive integer, got {days}")
+    if daily_minutes <= 0:
+        raise ValueError(f"daily_minutes must be a positive integer, got {daily_minutes}")
+
     # How many cards can the user realistically study per day given their time?
-    max_by_time = max(1, daily_minutes // _MINUTES_PER_CARD)
+    # If there are cards to study, ensure the time budget yields at least one
+    # card per day to avoid feeding a zero `max_cards_per_day` into
+    # `generate_schedule` which would result in zero `cards_to_study`.
+    max_by_time = daily_minutes // _MINUTES_PER_CARD
+    if total_cards > 0:
+        max_by_time = max(1, max_by_time)
 
     # How many new cards must be introduced per day to cover all cards within
     # the requested window?

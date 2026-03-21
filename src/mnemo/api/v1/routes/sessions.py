@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession as Session
 
 from mnemo.api.dependencies import current_user_dep, db_dep
 from mnemo.core import exceptions as exc
+from mnemo.core.constants import ErrorCode
 from mnemo.models import User
 from mnemo.schemas import session as session_schema
 from mnemo.services.session import SessionService
@@ -15,7 +16,14 @@ router = APIRouter()
 def _session_not_found(session_id: str) -> HTTPException:
     return HTTPException(
         status_code=404,
-        detail={"message": "Session not found.", "session_id": session_id},
+        detail={
+            "error": {
+                "code": ErrorCode.SESSION_NOT_FOUND.value,
+                "message": "Session not found.",
+                "status": 404,
+                "session_id": session_id,
+            }
+        },
     )
 
 

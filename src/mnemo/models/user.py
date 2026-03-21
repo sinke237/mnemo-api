@@ -46,11 +46,11 @@ class User(Base):
     def token_scopes(self) -> list[str]:
         """Transient per-request scopes; populated by the auth dependency."""
         scopes: list[str] = self.__dict__.get("_token_scopes", [])
-        return scopes
+        return list(scopes)
 
     @token_scopes.setter
     def token_scopes(self, value: list[str]) -> None:
-        self.__dict__["_token_scopes"] = value
+        self.__dict__["_token_scopes"] = list(value)
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, country={self.country}, timezone={self.timezone})>"

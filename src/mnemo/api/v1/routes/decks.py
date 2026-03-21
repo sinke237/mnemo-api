@@ -184,7 +184,8 @@ async def replace_deck(
         )
     except DeckNotFoundError as exc:
         return _deck_not_found(
-            getattr(exc, "deck_id", deck_id), getattr(exc, "resource_name", None)
+            getattr(exc, "deck_id", None) or deck_id,
+            getattr(exc, "resource_name", None) or None,
         )
     except DeckNameConflictError as exc:
         return _error_response(ErrorCode.DECK_NAME_CONFLICT, str(exc), 409)
@@ -221,7 +222,8 @@ async def update_deck(
         )
     except DeckNotFoundError as exc:
         return _deck_not_found(
-            getattr(exc, "deck_id", deck_id), getattr(exc, "resource_name", None)
+            getattr(exc, "deck_id", None) or deck_id,
+            getattr(exc, "resource_name", None) or None,
         )
     except DeckNameConflictError as exc:
         return _error_response(ErrorCode.DECK_NAME_CONFLICT, str(exc), 409)
@@ -250,7 +252,8 @@ async def delete_deck(
         await deck_service.delete_deck(db, current_user.id, deck_id)
     except DeckNotFoundError as exc:
         return _deck_not_found(
-            getattr(exc, "deck_id", deck_id), getattr(exc, "resource_name", None)
+            getattr(exc, "deck_id", None) or deck_id,
+            getattr(exc, "resource_name", None) or None,
         )
     return Response(status_code=200)
 
@@ -283,7 +286,8 @@ async def list_cards_for_deck(
         )
     except DeckNotFoundError as exc:
         return _deck_not_found(
-            getattr(exc, "deck_id", deck_id), getattr(exc, "resource_name", None)
+            getattr(exc, "deck_id", None) or deck_id,
+            getattr(exc, "resource_name", None) or None,
         )
 
     return FlashcardListResponse(
