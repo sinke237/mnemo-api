@@ -148,7 +148,7 @@ pytest --no-cov
 
 ```bash
 # Lint
-ruff check src/ tests/
+ruff check src/ tests/ alembic/versions/
 
 # Format
 black src/ tests/

@@ -89,7 +89,10 @@ class SessionService:
         cards = list(cards_result.scalars().all())
 
         session_id = generate_session_id()
-        expires_at = datetime.utcnow() + timedelta(hours=2)
+        if session_data.time_limit_s and session_data.time_limit_s > 0:
+            expires_at = datetime.utcnow() + timedelta(seconds=session_data.time_limit_s)
+        else:
+            expires_at = datetime.utcnow() + timedelta(hours=2)
 
         session = Session(
             id=session_id,
@@ -104,11 +107,12 @@ class SessionService:
         self.db.add(session)
 
         session_cards = []
-        for card in cards:
+        for index, card in enumerate(cards):
             session_card = SessionCard(
                 id=generate_session_id(),
                 session_id=session_id,
                 card_id=card.id,
+                position=index,
             )
             session_cards.append(session_card)
         self.db.add_all(session_cards)
@@ -171,9 +175,10 @@ class SessionService:
 
         current_result = await self.db.execute(
             select(SessionCard)
+            .with_for_update()
             .options(joinedload(SessionCard.card))
             .where(SessionCard.session_id == session.id, ~SessionCard.answered)
-            .order_by(SessionCard.created_at)
+            .order_by(SessionCard.position)
             .limit(1)
         )
         current_session_card = current_result.scalar_one_or_none()
@@ -199,7 +204,7 @@ class SessionService:
             select(SessionCard)
             .options(joinedload(SessionCard.card))
             .where(SessionCard.session_id == session.id, ~SessionCard.answered)
-            .order_by(SessionCard.created_at)
+            .order_by(SessionCard.position)
             .limit(1)
         )
         next_session_card = next_result.scalar_one_or_none()
@@ -252,8 +257,9 @@ class SessionService:
 
         current_result = await self.db.execute(
             select(SessionCard)
+            .with_for_update()
             .where(SessionCard.session_id == session.id, ~SessionCard.answered)
-            .order_by(SessionCard.created_at)
+            .order_by(SessionCard.position)
             .limit(1)
         )
         current_session_card = current_result.scalar_one_or_none()
@@ -261,14 +267,28 @@ class SessionService:
         if not current_session_card:
             raise NoCardsAvailableError("No more cards to skip in this session.")
 
-        current_session_card.created_at = cast(Any, datetime.utcnow())
+        # Move the skipped card to the end by bumping its position to max+1
+        # Acquire a row lock on the highest-position SessionCard for this session
+        # to avoid races when multiple callers try to compute the new max.
+        max_row_result = await self.db.execute(
+            select(SessionCard.position)
+            .where(SessionCard.session_id == session.id)
+            .order_by(SessionCard.position.desc())
+            .with_for_update()
+            .limit(1)
+        )
+        max_pos = max_row_result.scalar_one_or_none()
+        if max_pos is None:
+            # start positions at 0
+            max_pos = -1
+        current_session_card.position = cast(Any, max_pos + 1)
         await self.db.flush()
 
         next_result = await self.db.execute(
             select(SessionCard)
             .options(joinedload(SessionCard.card))
             .where(SessionCard.session_id == session.id, ~SessionCard.answered)
-            .order_by(SessionCard.created_at)
+            .order_by(SessionCard.position)
             .limit(1)
         )
         next_session_card = next_result.scalar_one_or_none()
@@ -315,7 +335,7 @@ class SessionService:
             select(SessionCard)
             .options(joinedload(SessionCard.card))
             .where(SessionCard.session_id == session.id, ~SessionCard.answered)
-            .order_by(SessionCard.created_at)
+            .order_by(SessionCard.position)
             .limit(1)
         )
         current_card = current_result.scalar_one_or_none()

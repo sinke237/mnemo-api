@@ -88,15 +88,23 @@ async def _process_job(
                 await _write_heartbeat()
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.warning("import_worker_periodic_heartbeat_write_failed")
+            except Exception as exc:
+                logger.warning(
+                    "import_worker_periodic_heartbeat_write_failed",
+                    error=str(exc),
+                    exc_info=True,
+                )
 
             try:
                 await asyncio.sleep(interval)
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.warning("import_worker_periodic_heartbeat_sleep_failed")
+            except Exception as exc:
+                logger.warning(
+                    "import_worker_periodic_heartbeat_sleep_failed",
+                    error=str(exc),
+                    exc_info=True,
+                )
 
     heartbeat_task: asyncio.Task[None] | None = None
     try:
