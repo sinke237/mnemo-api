@@ -13,6 +13,7 @@ from mnemo.api.v1.routes import (
     health,
     imports,
     memory_states,
+    plan,
     progress,
     sessions,
     users,
@@ -29,3 +30,4 @@ router.include_router(cards.router)
 router.include_router(memory_states.router)
 router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
 router.include_router(progress.router)
+router.include_router(plan.router)

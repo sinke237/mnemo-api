@@ -51,5 +51,5 @@ def generate_import_job_id() -> str:
 
 
 def generate_plan_id() -> str:
-    """Generate a learning plan ID with prefix pln_"""
+    """Generate a study plan ID with prefix pln_"""
     return f"pln_{secrets.token_hex(8)}"
