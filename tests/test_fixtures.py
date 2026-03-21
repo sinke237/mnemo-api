@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock
 
@@ -76,3 +77,43 @@ async def client(
         yield ac
 
     del app.dependency_overrides[get_current_user_from_token]
+
+
+@pytest.fixture
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Provide a per-test AsyncSession using AsyncSessionLocal with a
+    transaction started and rolled back afterwards to isolate test data.
+    """
+    # Use a top-level DB connection + outer transaction, then create a
+    # nested transaction (SAVEPOINT) for the test. This allows tests to
+    # call `await db_session.commit()` without making permanent changes
+    # (the outer transaction will be rolled back at teardown).
+    connection = await engine.connect()
+    outer_transaction = await connection.begin()
+
+    session = AsyncSession(bind=connection, expire_on_commit=False)
+
+    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    # Begin a SAVEPOINT so commits inside the test are contained.
+    await session.begin_nested()
+
+    try:
+        yield session
+    finally:
+        # Rollback nested transaction (savepoint) and close session,
+        # then rollback the outer transaction and close connection.
+        try:
+            await session.rollback()
+        except Exception:
+            logging.exception("Error rolling back test session nested transaction")
+        await session.close()
+        await outer_transaction.rollback()
+        await connection.close()
+        del app.dependency_overrides[get_db]
