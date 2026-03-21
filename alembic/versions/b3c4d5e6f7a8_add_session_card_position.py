@@ -27,21 +27,28 @@ def upgrade() -> None:
     # Backfill positions per session ordering by created_at then id.
     # Use a temporary table and a correlated update so this is portable
     # across SQLite and Postgres (avoids UPDATE ... FROM with a CTE).
-    op.execute(sa.text("""
-        CREATE TEMP TABLE IF NOT EXISTS temp_session_positions AS
-        SELECT id, row_number() OVER (PARTITION BY session_id ORDER BY created_at, id) - 1 AS rn
-        FROM session_cards;
+    # Execute each statement separately to avoid sending multiple
+    # commands in a single prepared statement (some DB drivers
+    # like asyncpg disallow that).
+    op.execute(sa.text(
+        "CREATE TEMP TABLE IF NOT EXISTS temp_session_positions AS\n"
+        "SELECT id, row_number() OVER (PARTITION BY session_id ORDER BY created_at, id) - 1 AS rn\n"
+        "FROM session_cards"
+    ))
 
-        UPDATE session_cards
-        SET position = (
-            SELECT rn FROM temp_session_positions WHERE temp_session_positions.id = session_cards.id
-        )
-        WHERE EXISTS (
-            SELECT 1 FROM temp_session_positions WHERE temp_session_positions.id = session_cards.id
-        );
+    op.execute(sa.text(
+        "UPDATE session_cards\n"
+        "SET position = (\n"
+        "    SELECT rn FROM temp_session_positions\n"
+        "    WHERE temp_session_positions.id = session_cards.id\n"
+        ")\n"
+        "WHERE EXISTS (\n"
+        "    SELECT 1 FROM temp_session_positions\n"
+        "    WHERE temp_session_positions.id = session_cards.id\n"
+        ")"
+    ))
 
-        DROP TABLE IF EXISTS temp_session_positions;
-    """))
+    op.execute(sa.text("DROP TABLE IF EXISTS temp_session_positions"))
 
     # Make column non-nullable
     op.alter_column("session_cards", "position", nullable=False)

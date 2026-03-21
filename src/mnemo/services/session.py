@@ -175,7 +175,7 @@ class SessionService:
 
         current_result = await self.db.execute(
             select(SessionCard)
-            .with_for_update()
+            .with_for_update(of=SessionCard)
             .options(joinedload(SessionCard.card))
             .where(SessionCard.session_id == session.id, ~SessionCard.answered)
             .order_by(SessionCard.position)
