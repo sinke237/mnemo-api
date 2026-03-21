@@ -12,6 +12,13 @@ from mnemo.services.session import SessionService
 router = APIRouter()
 
 
+def _session_not_found(session_id: str) -> HTTPException:
+    return HTTPException(
+        status_code=404,
+        detail={"message": "Session not found.", "session_id": session_id},
+    )
+
+
 @router.post("/", response_model=session_schema.Session, status_code=201)
 async def start_session(
     session_data: session_schema.SessionStart,
@@ -37,7 +44,7 @@ async def get_session(
     try:
         return await service.get_session(session_id)
     except exc.SessionNotFoundError as e:
-        raise HTTPException(status_code=404, detail="Session not found.") from e
+        raise _session_not_found(session_id) from e
 
 
 @router.post("/{session_id}/answer", response_model=session_schema.AnswerResult)
@@ -52,7 +59,7 @@ async def answer_card(
     try:
         return await service.answer_card(session_id, answer_data)
     except exc.SessionNotFoundError as e:
-        raise HTTPException(status_code=404, detail="Session not found.") from e
+        raise _session_not_found(session_id) from e
     except exc.SessionAlreadyEndedError as e:
         raise HTTPException(status_code=409, detail="Session has already ended.") from e
     except exc.AnswerTooLongError as e:
@@ -70,9 +77,9 @@ async def skip_card(
     """Skips the current card in a session."""
     service = SessionService(db, current_user)
     try:
-        return await service.skip_card(session_id)  # type: ignore[no-any-return]
+        return await service.skip_card(session_id)
     except exc.SessionNotFoundError as e:
-        raise HTTPException(status_code=404, detail="Session not found.") from e
+        raise _session_not_found(session_id) from e
     except exc.SessionAlreadyEndedError as e:
         raise HTTPException(status_code=409, detail="Session has already ended.") from e
     except exc.NoCardsAvailableError as e:
@@ -88,9 +95,9 @@ async def end_session(
     """Ends a session early."""
     service = SessionService(db, current_user)
     try:
-        return await service.end_session(session_id)  # type: ignore[no-any-return]
+        return await service.end_session(session_id)
     except exc.SessionNotFoundError as e:
-        raise HTTPException(status_code=404, detail="Session not found.") from e
+        raise _session_not_found(session_id) from e
     except exc.SessionAlreadyEndedError as e:
         raise HTTPException(status_code=409, detail="Session has already ended.") from e
 
@@ -106,4 +113,4 @@ async def get_session_summary(
     try:
         return await service.get_session_summary(session_id)
     except exc.SessionNotFoundError as e:
-        raise HTTPException(status_code=404, detail="Session not found.") from e
+        raise _session_not_found(session_id) from e

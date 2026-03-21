@@ -99,7 +99,7 @@ async def get_deck_progress(
                     "code": ErrorCode.DECK_NOT_FOUND.value,
                     "message": "Deck not found.",
                     "status": HTTPStatusCode.NOT_FOUND,
-                    "resource": {"type": "deck", "id": deck_id},
+                    "resource": {"type": "deck", "id": deck_id, "name": None},
                 }
             },
         )

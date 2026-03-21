@@ -120,7 +120,7 @@ async def create_plan(
     result = await db.execute(select(Deck).where(Deck.id == deck_id, Deck.user_id == user.id))
     deck = result.scalar_one_or_none()
     if deck is None:
-        raise DeckNotFoundError(f"Deck not found: {deck_id}")
+        raise DeckNotFoundError(deck_id=deck_id)
 
     total_cards = deck.card_count or 0
 

@@ -54,7 +54,7 @@ class ErrorResponse(BaseModel):
             "example": {
                 "error": {
                     "code": "DECK_NOT_FOUND",
-                    "message": "No deck found.",
+                    "message": "Deck not found.",
                     "status": 404,
                     "request_id": "req_7f3a9c12",
                     "resource": {"type": "deck", "id": "dck_x9y8z7w6"},

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from mnemo.models.session import Session
 
 
-class User(Base):  # type: ignore[misc]
+class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
@@ -41,6 +41,16 @@ class User(Base):  # type: ignore[misc]
     sessions: Mapped[list["Session"]] = relationship(
         "Session", back_populates="user", cascade="all, delete-orphan"
     )
+
+    @property
+    def token_scopes(self) -> list[str]:
+        """Transient per-request scopes; populated by the auth dependency."""
+        scopes: list[str] = self.__dict__.get("_token_scopes", [])
+        return scopes
+
+    @token_scopes.setter
+    def token_scopes(self, value: list[str]) -> None:
+        self.__dict__["_token_scopes"] = value
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, country={self.country}, timezone={self.timezone})>"

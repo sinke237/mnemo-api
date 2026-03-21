@@ -98,7 +98,11 @@ async def create_plan(
                     "code": ErrorCode.DECK_NOT_FOUND.value,
                     "message": "Deck not found.",
                     "status": HTTPStatusCode.NOT_FOUND,
-                    "resource": {"type": "deck", "id": body.deck_id},
+                    "resource": {
+                        "type": "deck",
+                        "id": getattr(err, "deck_id", body.deck_id),
+                        "name": getattr(err, "resource_name", None),
+                    },
                 }
             },
         ) from err

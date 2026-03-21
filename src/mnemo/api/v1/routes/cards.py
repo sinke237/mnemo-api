@@ -4,9 +4,6 @@ Implements flashcard CRUD.
 Per spec section 07: Flashcards.
 """
 
-import re
-from typing import cast
-
 from fastapi import APIRouter, Depends, Header, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +28,28 @@ router = APIRouter(prefix="", tags=["cards"])
 # module-level Depends singletons to satisfy ruff B008
 _db_dep = Depends(get_db)
 _current_user_dep = Depends(get_current_user_from_token)
+
+
+def _card_not_found(card_id: str, resource_name: str | None = None) -> JSONResponse:
+    return _error_response(
+        ErrorCode.CARD_NOT_FOUND,
+        "Card not found.",
+        404,
+        resource_type="card",
+        resource_id=card_id,
+        resource_name=resource_name,
+    )
+
+
+def _deck_not_found(deck_id: str | None, resource_name: str | None = None) -> JSONResponse:
+    return _error_response(
+        ErrorCode.DECK_NOT_FOUND,
+        "Deck not found.",
+        404,
+        resource_type="deck",
+        resource_id=deck_id,
+        resource_name=resource_name,
+    )
 
 
 @router.post(
@@ -81,10 +100,10 @@ async def create_card(
                 )
             return response
         except IdempotencyConflictError:
-            record = await idempotency_service.get_idempotency_record(
+            existing = await idempotency_service.get_idempotency_record(
                 db, current_user.id, endpoint, idempotency_key
             )
-            if record is None:
+            if existing is None:
                 error = ErrorResponse(
                     error=ErrorDetail(
                         code=ErrorCode.IDEMPOTENCY_CONFLICT,
@@ -93,14 +112,10 @@ async def create_card(
                     )
                 )
                 return JSONResponse(status_code=409, content=error.model_dump(mode="json"))
-            return JSONResponse(status_code=record.status_code, content=record.response_body)
-        except DeckNotFoundError:
-            return _error_response(
-                ErrorCode.DECK_NOT_FOUND,
-                "Deck not found.",
-                404,
-                resource_type="deck",
-                resource_id=deck_id,
+            return JSONResponse(status_code=existing.status_code, content=existing.response_body)
+        except DeckNotFoundError as exc:
+            return _deck_not_found(
+                getattr(exc, "deck_id", deck_id), getattr(exc, "resource_name", None)
             )
 
     try:
@@ -116,13 +131,9 @@ async def create_card(
                 card_data.difficulty if card_data.difficulty is not None else DEFAULT_DIFFICULTY
             ),
         )
-    except DeckNotFoundError:
-        return _error_response(
-            ErrorCode.DECK_NOT_FOUND,
-            "Deck not found.",
-            404,
-            resource_type="deck",
-            resource_id=deck_id,
+    except DeckNotFoundError as exc:
+        return _deck_not_found(
+            getattr(exc, "deck_id", deck_id), getattr(exc, "resource_name", None)
         )
 
     return FlashcardResponse.model_validate(card)
@@ -146,13 +157,7 @@ async def get_card(
 ) -> FlashcardResponse | JSONResponse:
     card = await flashcard_service.get_card_by_id(db, current_user.id, card_id)
     if card is None:
-        return _error_response(
-            ErrorCode.CARD_NOT_FOUND,
-            "Card not found.",
-            404,
-            resource_type="card",
-            resource_id=card_id,
-        )
+        return _card_not_found(card_id)
     return FlashcardResponse.model_validate(card)
 
 
@@ -185,25 +190,18 @@ async def replace_card(
             tags=card_data.tags,
             difficulty=card_data.difficulty,
         )
-    except CardNotFoundError:
-        return _error_response(
-            ErrorCode.CARD_NOT_FOUND,
-            "Card not found.",
-            404,
-            resource_type="card",
-            resource_id=card_id,
+    except CardNotFoundError as exc:
+        return _card_not_found(
+            getattr(exc, "card_id", card_id), getattr(exc, "resource_name", None)
         )
     except DeckNotFoundError as exc:
-        # Try to extract deck id from the exception message, if present.
-        exc_txt = str(exc) or ""
-        m = re.search(r"(dck_[0-9A-Za-z_\-]+)", exc_txt)
-        deck_id_from_exc = m.group(1) if m else None
         return _error_response(
             ErrorCode.DECK_NOT_FOUND,
             "Deck not found.",
             404,
             resource_type="deck",
-            resource_id=deck_id_from_exc,
+            resource_id=getattr(exc, "deck_id", None),
+            resource_name=getattr(exc, "resource_name", None),
         )
 
     return FlashcardResponse.model_validate(card)
@@ -238,16 +236,19 @@ async def update_card(
             tags=card_data.tags,
             difficulty=card_data.difficulty,
         )
-    except CardNotFoundError:
-        return _error_response(
-            ErrorCode.CARD_NOT_FOUND,
-            "Card not found.",
-            404,
-            resource_type="card",
-            resource_id=card_id,
+    except CardNotFoundError as exc:
+        return _card_not_found(
+            getattr(exc, "card_id", card_id), getattr(exc, "resource_name", None)
         )
     except DeckNotFoundError as exc:
-        return _error_response(ErrorCode.DECK_NOT_FOUND, str(exc), 404)
+        return _error_response(
+            ErrorCode.DECK_NOT_FOUND,
+            "Deck not found.",
+            404,
+            resource_type="deck",
+            resource_id=getattr(exc, "deck_id", None),
+            resource_name=getattr(exc, "resource_name", None),
+        )
 
     return FlashcardResponse.model_validate(card)
 
@@ -271,18 +272,11 @@ async def delete_card(
 ) -> Response:
     try:
         await flashcard_service.delete_card(db, current_user.id, card_id)
-    except CardNotFoundError:
-        return cast(
-            Response,
-            _error_response(
-                ErrorCode.CARD_NOT_FOUND,
-                "Card not found.",
-                404,
-                resource_type="card",
-                resource_id=card_id,
-            ),
+    except CardNotFoundError as exc:
+        return _card_not_found(
+            getattr(exc, "card_id", card_id), getattr(exc, "resource_name", None)
         )
     except DeckNotFoundError as exc:
-        return cast(Response, _error_response(ErrorCode.DECK_NOT_FOUND, str(exc), 404))
+        return _deck_not_found(getattr(exc, "deck_id", None), getattr(exc, "resource_name", None))
 
     return Response(status_code=200)

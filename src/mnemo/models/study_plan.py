@@ -13,7 +13,7 @@ from sqlalchemy.types import JSON
 from mnemo.db.database import Base
 
 
-class StudyPlan(Base):  # type: ignore[misc]
+class StudyPlan(Base):
     __tablename__ = "study_plans"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)

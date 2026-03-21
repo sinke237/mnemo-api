@@ -14,7 +14,7 @@ from mnemo.core.constants import DEFAULT_EASE_FACTOR
 from mnemo.db.database import Base
 
 
-class CardMemoryState(Base):  # type: ignore[misc]
+class CardMemoryState(Base):
     """Card memory state table (composite key: card_id + user_id)."""
 
     __tablename__ = "card_memory_states"

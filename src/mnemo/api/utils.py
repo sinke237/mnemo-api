@@ -1,8 +1,7 @@
 """API route helpers."""
 
-from typing import Any, cast
+from typing import Any
 
-from fastapi import Response
 from fastapi.responses import JSONResponse
 
 from mnemo.core.constants import ErrorCode
@@ -15,7 +14,7 @@ def _error_response(
     resource_type: str | None = None,
     resource_id: str | None = None,
     resource_name: str | None = None,
-) -> Response:
+) -> JSONResponse:
     error_obj: dict[str, Any] = {
         "code": code.value,
         "message": message,
@@ -31,10 +30,7 @@ def _error_response(
             resource["name"] = resource_name
         error_obj["resource"] = resource
 
-    return cast(
-        Response,
-        JSONResponse(
-            status_code=status_code,
-            content={"error": error_obj},
-        ),
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": error_obj},
     )

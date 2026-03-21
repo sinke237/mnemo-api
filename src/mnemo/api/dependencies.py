@@ -17,7 +17,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.core.constants import ErrorCode, PermissionScope
-from mnemo.db.database import get_db
+from mnemo.db.database import get_db as get_db
 from mnemo.models.api_key import APIKey
 from mnemo.models.user import User
 from mnemo.services import api_key as api_key_service
@@ -151,8 +151,6 @@ async def get_current_user_from_token(
             },
         )
 
-    # Attach a transient attribute to the SQLAlchemy model instance.
-    # Direct attribute assignment is fine on ORM instances for transient data.
     user.token_scopes = scopes
 
     return user

@@ -37,7 +37,7 @@ async def create_card(
 ) -> Flashcard:
     deck = await _get_deck(db, user_id, deck_id)
     if deck is None:
-        raise DeckNotFoundError(f"Deck not found: {deck_id}")
+        raise DeckNotFoundError(deck_id=deck_id)
 
     card = Flashcard(
         id=generate_card_id(),
@@ -77,7 +77,7 @@ async def list_cards_for_deck(
 ) -> tuple[Sequence[Flashcard], dict[str, int]]:
     deck = await _get_deck(db, user_id, deck_id)
     if deck is None:
-        raise DeckNotFoundError(f"Deck not found: {deck_id}")
+        raise DeckNotFoundError(deck_id=deck_id)
 
     page = max(page, 1)
     per_page = min(max(per_page, 1), MAX_PAGE_SIZE)
@@ -113,11 +113,11 @@ async def update_card(
 ) -> Flashcard:
     card = await get_card_by_id(db, user_id, card_id)
     if card is None:
-        raise CardNotFoundError(f"Card not found: {card_id}")
+        raise CardNotFoundError(card_id=card_id)
 
     deck = await _get_deck(db, user_id, card.deck_id)
     if deck is None:
-        raise DeckNotFoundError(f"Deck not found: {card.deck_id}")
+        raise DeckNotFoundError(deck_id=card.deck_id)
 
     changed = False
 
@@ -152,11 +152,11 @@ async def update_card(
 async def delete_card(db: AsyncSession, user_id: str, card_id: str) -> None:
     card = await get_card_by_id(db, user_id, card_id)
     if card is None:
-        raise CardNotFoundError(f"Card not found: {card_id}")
+        raise CardNotFoundError(card_id=card_id)
 
     deck = await _get_deck(db, user_id, card.deck_id)
     if deck is None:
-        raise DeckNotFoundError(f"Deck not found: {card.deck_id}")
+        raise DeckNotFoundError(deck_id=card.deck_id)
 
     await db.delete(card)
 

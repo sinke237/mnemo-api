@@ -15,7 +15,7 @@ from mnemo.core.constants import DEFAULT_DIFFICULTY
 from mnemo.db.database import Base
 
 
-class Flashcard(Base):  # type: ignore[misc]
+class Flashcard(Base):
     """Flashcard table."""
 
     __tablename__ = "flashcards"

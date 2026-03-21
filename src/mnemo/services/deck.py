@@ -101,7 +101,7 @@ async def list_decks(
     total = await db.scalar(count_stmt)
     total = int(total or 0)
 
-    stmt: Select[Deck] = (
+    stmt: Select[tuple[Deck]] = (
         select(Deck)
         .where(*filters)
         .order_by(order_clause)
@@ -125,7 +125,7 @@ async def update_deck(
 ) -> Deck:
     deck = await get_deck_by_id(db, user_id, deck_id)
     if deck is None:
-        raise DeckNotFoundError(f"Deck not found: {deck_id}")
+        raise DeckNotFoundError(deck_id=deck_id)
 
     changed = False
 
@@ -158,7 +158,7 @@ async def update_deck(
 async def delete_deck(db: AsyncSession, user_id: str, deck_id: str) -> None:
     deck = await get_deck_by_id(db, user_id, deck_id)
     if deck is None:
-        raise DeckNotFoundError(f"Deck not found: {deck_id}")
+        raise DeckNotFoundError(deck_id=deck_id)
 
     card_ids = await db.execute(select(Flashcard.id).where(Flashcard.deck_id == deck.id))
     card_id_list = card_ids.scalars().all()
