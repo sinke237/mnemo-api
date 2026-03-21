@@ -51,3 +51,19 @@ async def close_redis() -> None:
     if _redis_client is not None:
         await _redis_client.aclose()
         _redis_client = None
+
+
+WORKER_HEARTBEAT_KEY = "mnemo:worker:heartbeat"
+WORKER_HEARTBEAT_TTL = 30  # seconds; worker writes every loop iteration (~1 s when idle)
+
+
+async def check_worker_heartbeat() -> bool:
+    """
+    Health check: returns True if the import worker has written a heartbeat
+    key to Redis within the last WORKER_HEARTBEAT_TTL seconds.
+    """
+    try:
+        client = get_redis()
+        return bool(await client.exists(WORKER_HEARTBEAT_KEY))
+    except Exception:
+        return False

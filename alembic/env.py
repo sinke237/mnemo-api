@@ -10,9 +10,6 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-# Make sure src/ is on the path so we can import mnemo
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
 from mnemo.core.config import get_settings
 from mnemo.db.database import Base
 
@@ -25,7 +22,7 @@ settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Import all models here so Alembic can detect them for autogenerate
-from mnemo.models import api_key, card_memory_state, deck, flashcard, idempotency_key, user
+from mnemo import models
 
 target_metadata = Base.metadata
 

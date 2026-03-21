@@ -73,17 +73,29 @@ async def store_idempotency_record(
         status_code=status_code,
         response_body=response_body,
     )
-    db.add(record)
+    # Use the provided DB session so transactional behavior is consistent with
+    # `reserve_idempotency_record`. Do not commit here; caller controls commit.
+    # Use a nested transaction (SAVEPOINT) so we can rollback only this
+    # insert on IntegrityError without affecting the caller's outer
+    # transactional work.
     try:
-        await db.flush()
+        async with db.begin_nested():
+            db.add(record)
+            await db.flush()
+
+        # If we reach here, the nested transaction succeeded; refresh and return
+        await db.refresh(record)
+        return record
     except IntegrityError:
-        # Another request stored it concurrently; fetch and return existing
-        await db.rollback()
+        # IntegrityError likely means another request inserted the same
+        # idempotency key concurrently. Do NOT call db.rollback() on the
+        # caller's session here; the nested transaction was rolled back
+        # automatically when the exception was raised. Fetch and return the
+        # existing record attached to the caller's session.
         existing = await get_idempotency_record(db, user_id, endpoint, key)
         if existing is None:
             raise
         return existing
-    return record
 
 
 async def reserve_idempotency_record(

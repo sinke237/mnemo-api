@@ -2,55 +2,28 @@
 Integration tests for deck and flashcard CRUD.
 """
 
-from collections.abc import AsyncIterator
-
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.core.constants import DEFAULT_DIFFICULTY, PermissionScope
-from mnemo.db.database import AsyncSessionLocal
 from mnemo.models.card_memory_state import CardMemoryState
-from mnemo.models.deck import Deck
 from mnemo.models.flashcard import Flashcard
 from mnemo.models.user import User
-from mnemo.schemas.user import UserCreate
 from mnemo.services.api_key import create_api_key
-from mnemo.services.user import create_user
 
 
 @pytest.fixture
-async def db_session() -> AsyncIterator[AsyncSession]:
-    async with AsyncSessionLocal() as session:
-        await session.execute(delete(CardMemoryState))
-        await session.execute(delete(Flashcard))
-        await session.execute(delete(Deck))
-        await session.execute(delete(User))
-        await session.commit()
-        yield session
-        await session.execute(delete(CardMemoryState))
-        await session.execute(delete(Flashcard))
-        await session.execute(delete(Deck))
-        await session.execute(delete(User))
-        await session.commit()
-
-
-@pytest.fixture
-async def user_token(db_session: AsyncSession, client: AsyncClient) -> tuple[User, str]:
-    user_data = UserCreate(
-        display_name="Deck User",
-        country="US",
-        timezone="America/New_York",
-        locale="en-US",
-        preferred_language="en",
-        daily_goal_cards=20,
-    )
-    user = await create_user(db_session, user_data)
+async def user_token(
+    db: AsyncSession, client: AsyncClient, authenticated_user: User
+) -> tuple[User, str]:
+    db.add(authenticated_user)
+    await db.flush()
 
     _, plain_key = await create_api_key(
-        db=db_session,
-        user_id=user.id,
+        db=db,
+        user_id=authenticated_user.id,
         name="Deck Key",
         is_live=False,
         scopes=[
@@ -59,15 +32,15 @@ async def user_token(db_session: AsyncSession, client: AsyncClient) -> tuple[Use
             PermissionScope.PROGRESS_READ,
         ],
     )
-    await db_session.commit()
+    await db.flush()
 
     token_response = await client.post(
         "/v1/auth/token",
-        json={"user_id": user.id, "api_key": plain_key},
+        json={"user_id": authenticated_user.id, "api_key": plain_key},
     )
     assert token_response.status_code == 200
     token = token_response.json()["access_token"]
-    return user, token
+    return authenticated_user, token
 
 
 @pytest.mark.asyncio
@@ -75,7 +48,6 @@ async def test_deck_card_crud_flow(client: AsyncClient, user_token: tuple[User, 
     _, token = user_token
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Create deck
     create_deck = await client.post(
         "/v1/decks",
         json={"name": "Rust Basics", "description": "Core Rust concepts"},
@@ -87,7 +59,6 @@ async def test_deck_card_crud_flow(client: AsyncClient, user_token: tuple[User, 
     assert deck["card_count"] == 0
     assert deck["version"] == 1
 
-    # Add 5 cards
     card_ids = []
     for idx in range(5):
         resp = await client.post(
@@ -100,10 +71,8 @@ async def test_deck_card_crud_flow(client: AsyncClient, user_token: tuple[User, 
 
     deck_after_cards = await client.get(f"/v1/decks/{deck_id}", headers=headers)
     assert deck_after_cards.status_code == 200
-    deck_after_cards_data = deck_after_cards.json()
-    assert deck_after_cards_data["version"] == 6
+    assert deck_after_cards.json()["version"] == 6
 
-    # Update one card
     update_card = await client.patch(
         f"/v1/cards/{card_ids[0]}",
         json={"question": "Q0 updated"},
@@ -111,14 +80,9 @@ async def test_deck_card_crud_flow(client: AsyncClient, user_token: tuple[User, 
     )
     assert update_card.status_code == 200
 
-    # Delete one card
-    delete_card = await client.delete(
-        f"/v1/cards/{card_ids[1]}",
-        headers=headers,
-    )
+    delete_card = await client.delete(f"/v1/cards/{card_ids[1]}", headers=headers)
     assert delete_card.status_code == 200
 
-    # Verify card_count is correct
     deck_resp = await client.get(f"/v1/decks/{deck_id}", headers=headers)
     assert deck_resp.status_code == 200
     deck_data = deck_resp.json()
@@ -141,7 +105,7 @@ async def test_deck_name_conflict(client: AsyncClient, user_token: tuple[User, s
 
 @pytest.mark.asyncio
 async def test_cascade_delete_deck_cards_memory_state(
-    client: AsyncClient, user_token: tuple[User, str], db_session: AsyncSession
+    client: AsyncClient, user_token: tuple[User, str], db: AsyncSession
 ) -> None:
     user, token = user_token
     headers = {"Authorization": f"Bearer {token}"}
@@ -156,8 +120,7 @@ async def test_cascade_delete_deck_cards_memory_state(
     )
     card_id = card_resp.json()["id"]
 
-    # Insert a memory state row manually
-    db_session.add(
+    db.add(
         CardMemoryState(
             card_id=card_id,
             user_id=user.id,
@@ -167,19 +130,17 @@ async def test_cascade_delete_deck_cards_memory_state(
             streak=1,
         )
     )
-    await db_session.commit()
+    await db.flush()
 
     delete_resp = await client.delete(f"/v1/decks/{deck_id}", headers=headers)
     assert delete_resp.status_code == 200
 
-    db_session.expire_all()
+    db.expire_all()
 
-    cards = await db_session.execute(select(Flashcard).where(Flashcard.deck_id == deck_id))
+    cards = await db.execute(select(Flashcard).where(Flashcard.deck_id == deck_id))
     assert cards.scalars().all() == []
 
-    states = await db_session.execute(
-        select(CardMemoryState).where(CardMemoryState.card_id == card_id)
-    )
+    states = await db.execute(select(CardMemoryState).where(CardMemoryState.card_id == card_id))
     assert states.scalars().all() == []
 
 
@@ -202,8 +163,6 @@ async def test_pagination_shape(client: AsyncClient, user_token: tuple[User, str
     cards_resp = await client.get(f"/v1/decks/{deck_id}/cards?page=1&per_page=2", headers=headers)
     assert cards_resp.status_code == 200
     data = cards_resp.json()
-    assert "data" in data
-    assert "pagination" in data
     assert data["pagination"]["page"] == 1
     assert data["pagination"]["per_page"] == 2
     assert data["pagination"]["total"] == 3

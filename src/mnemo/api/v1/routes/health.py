@@ -8,7 +8,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from mnemo.db.database import check_db_connection
-from mnemo.db.redis import check_redis_connection
+from mnemo.db.redis import check_redis_connection, check_worker_heartbeat
 
 router = APIRouter(tags=["health"])
 
@@ -17,6 +17,7 @@ class HealthResponse(BaseModel):
     status: str
     db: str
     redis: str
+    worker: str
     version: str
 
 
@@ -32,12 +33,14 @@ class HealthResponse(BaseModel):
 async def health_check() -> HealthResponse:
     db_ok = await check_db_connection()
     redis_ok = await check_redis_connection()
+    worker_ok = await check_worker_heartbeat()
 
-    all_ok = db_ok and redis_ok
+    all_ok = db_ok and redis_ok and worker_ok
 
     return HealthResponse(
         status="ok" if all_ok else "degraded",
         db="ok" if db_ok else "unreachable",
         redis="ok" if redis_ok else "unreachable",
+        worker="ok" if worker_ok else "unreachable",
         version="1.0.0",
     )
