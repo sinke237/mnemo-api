@@ -6,6 +6,7 @@ from mnemo.core.constants import PermissionScope
 from mnemo.main import app
 from mnemo.schemas.user import UserCreate
 from mnemo.services.api_key import create_api_key
+from mnemo.services.deck import create_deck
 from mnemo.services.user import create_user
 
 # `db_session` fixture is provided by tests.test_fixtures.py
@@ -23,6 +24,15 @@ async def test_progress_endpoints_require_scope(db_session: AsyncSession) -> Non
         daily_goal_cards=10,
     )
     user = await create_user(db_session, user_data)
+
+    # Create a deck owned by the user (needed for deck-progress scope check)
+    deck = await create_deck(
+        db=db_session,
+        user_id=user.id,
+        name="Scope Test Deck",
+        description=None,
+        tags=[],
+    )
 
     # Create API key WITHOUT PROGRESS_READ
     _, key_no_scope = await create_api_key(
@@ -58,6 +68,13 @@ async def test_progress_endpoints_require_scope(db_session: AsyncSession) -> Non
         )
         assert resp.status_code == 403
 
+        # Access deck progress without scope -> should be 403
+        resp_deck_no_scope = await client.get(
+            f"/v1/users/{user.id}/progress/{deck.id}",
+            headers={"Authorization": f"Bearer {token_no_scope}"},
+        )
+        assert resp_deck_no_scope.status_code == 403
+
         # Get JWT for key with scope
         token_resp2 = await client.post(
             "/v1/auth/token", json={"user_id": user.id, "api_key": key_with_scope}
@@ -70,6 +87,13 @@ async def test_progress_endpoints_require_scope(db_session: AsyncSession) -> Non
             f"/v1/users/{user.id}/progress", headers={"Authorization": f"Bearer {token_with_scope}"}
         )
         assert resp2.status_code == 200
+
+        # Access deck progress with scope -> should be 200
+        resp_deck_with_scope = await client.get(
+            f"/v1/users/{user.id}/progress/{deck.id}",
+            headers={"Authorization": f"Bearer {token_with_scope}"},
+        )
+        assert resp_deck_with_scope.status_code == 200
 
         # Access streak -> should be 200 with scope
         resp3 = await client.get(

@@ -94,10 +94,11 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     session = AsyncSession(bind=connection, expire_on_commit=False)
 
     async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        request_session = AsyncSession(bind=connection, expire_on_commit=False)
         try:
-            yield session
+            yield request_session
         finally:
-            await session.close()
+            await request_session.close()
 
     app.dependency_overrides[get_db] = override_get_db
 
