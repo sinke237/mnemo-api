@@ -23,6 +23,13 @@ class ErrorDetail(BaseModel):
     details: dict[str, Any] | None = Field(
         None, description="Additional context for validation errors"
     )
+    resource: dict[str, str] | None = Field(
+        None,
+        description=(
+            "Optional resource context, e.g. {'type': 'deck', 'id': 'dck_xxx', "
+            "'name': 'My Deck'}"
+        ),
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -47,9 +54,10 @@ class ErrorResponse(BaseModel):
             "example": {
                 "error": {
                     "code": "DECK_NOT_FOUND",
-                    "message": "No deck found with ID dck_x9y8z7w6.",
+                    "message": "Deck not found.",
                     "status": 404,
                     "request_id": "req_7f3a9c12",
+                    "resource": {"type": "deck", "id": "dck_x9y8z7w6"},
                 }
             }
         }

@@ -109,9 +109,21 @@ class DeckError(Exception):
 
 
 class DeckNotFoundError(DeckError):
-    """Raised when a deck does not exist or is not accessible."""
+    """Raised when a deck does not exist or is not accessible.
 
-    pass
+    Accepts an optional `deck_id` parameter so callers can provide structured
+    resource context instead of relying on parsing the exception message.
+    """
+
+    def __init__(
+        self,
+        message: str | None = None,
+        deck_id: str | None = None,
+        resource_name: str | None = None,
+    ) -> None:
+        super().__init__(message or "Deck not found.")
+        self.deck_id = deck_id
+        self.resource_name = resource_name
 
 
 class DeckNameConflictError(DeckError):
@@ -127,9 +139,21 @@ class CardError(Exception):
 
 
 class CardNotFoundError(CardError):
-    """Raised when a card does not exist or is not accessible."""
+    """Raised when a card does not exist or is not accessible.
 
-    pass
+    Accepts optional `card_id` and `resource_name` parameters so callers can
+    provide structured resource context to API handlers.
+    """
+
+    def __init__(
+        self,
+        message: str | None = None,
+        card_id: str | None = None,
+        resource_name: str | None = None,
+    ) -> None:
+        super().__init__(message or "Card not found.")
+        self.card_id = card_id
+        self.resource_name = resource_name
 
 
 # ── Session Exceptions ───────────────────────────────────────────────────────
@@ -142,7 +166,32 @@ class SessionError(Exception):
 
 
 class SessionNotFoundError(SessionError):
-    """Raised when a session does not exist or is not accessible."""
+    """Raised when a session does not exist or is not accessible.
+
+    Accepts an optional `session_id` parameter so callers can provide structured
+    resource context instead of relying on parsing the exception message.
+    """
+
+    def __init__(
+        self,
+        message: str | None = None,
+        session_id: str | None = None,
+    ) -> None:
+        super().__init__(message or "Session not found.")
+        self.session_id = session_id
+
+
+# ── Plan Exceptions ───────────────────────────────────────────────────────────
+
+
+class PlanError(Exception):
+    """Base exception for study plan errors."""
+
+    pass
+
+
+class PlanNotFoundError(PlanError):
+    """Raised when no active study plan exists for a user."""
 
     pass
 

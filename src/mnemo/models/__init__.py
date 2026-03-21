@@ -8,6 +8,7 @@ from .idempotency_key import IdempotencyKey
 from .import_job import ImportJob
 from .session import Session
 from .session_card import SessionCard
+from .study_plan import StudyPlan
 from .user import User
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     "Flashcard",
     "IdempotencyKey",
     "ImportJob",
+    "StudyPlan",
     "User",
     "Session",
     "SessionCard",

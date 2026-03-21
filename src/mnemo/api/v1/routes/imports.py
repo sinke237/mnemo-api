@@ -35,6 +35,17 @@ _mode_form = Form(ImportMode.MERGE)
 settings = get_settings()
 
 
+def _import_job_not_found(job_id: str, resource_name: str | None = None) -> JSONResponse:
+    return _error_response(
+        ErrorCode.IMPORT_JOB_NOT_FOUND,
+        "Import job not found.",
+        HTTPStatusCode.NOT_FOUND,
+        resource_type="import_job",
+        resource_id=job_id,
+        resource_name=resource_name,
+    )
+
+
 @router.post(
     "/csv",
     status_code=HTTPStatusCode.ACCEPTED,
@@ -104,8 +115,10 @@ async def import_csv(
         if deck is None:
             return _error_response(
                 ErrorCode.DECK_NOT_FOUND,
-                f"No deck found with ID {deck_id}.",
+                "Deck not found.",
                 HTTPStatusCode.NOT_FOUND,
+                resource_type="deck",
+                resource_id=deck_id,
             )
     else:
         if not deck_name:
@@ -172,11 +185,7 @@ async def get_import_job(
 ) -> ImportJobStatusResponse | JSONResponse:
     job = await import_service.get_import_job(db, user_id=current_user.id, job_id=job_id)
     if job is None:
-        return _error_response(
-            ErrorCode.IMPORT_JOB_NOT_FOUND,
-            f"No job found with ID {job_id}.",
-            HTTPStatusCode.NOT_FOUND,
-        )
+        return _import_job_not_found(job_id)
 
     completed_local = (
         to_local_time(job.completed_at, current_user.timezone) if job.completed_at else None

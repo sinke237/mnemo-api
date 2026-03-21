@@ -18,7 +18,7 @@ class SessionStatus(enum.StrEnum):
     ENDED = "ended"
 
 
-class Session(Base):  # type: ignore[misc]
+class Session(Base):
     __tablename__ = "sessions"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, index=True)

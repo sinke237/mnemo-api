@@ -29,6 +29,20 @@ db_dep = Depends(get_db)
 current_user_dep = Depends(get_current_user_from_token)
 
 
+def _user_not_found(user_id: str) -> HTTPException:
+    return HTTPException(
+        status_code=404,
+        detail={
+            "error": {
+                "code": ErrorCode.USER_NOT_FOUND.value,
+                "message": "User not found.",
+                "status": 404,
+                "resource": {"type": "user", "id": user_id},
+            }
+        },
+    )
+
+
 @router.post(
     "",
     status_code=201,
@@ -131,16 +145,7 @@ async def get_user(
     user = await user_service.get_user_by_id(db, user_id)
 
     if user is None:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error": {
-                    "code": ErrorCode.USER_NOT_FOUND.value,
-                    "message": f"User not found: {user_id}",
-                    "status": 404,
-                }
-            },
-        )
+        raise _user_not_found(user_id)
 
     return UserResponse.model_validate(user)
 
@@ -188,16 +193,7 @@ async def update_user(
         user = await user_service.update_user(db, user_id, user_data)
 
         if user is None:
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error": {
-                        "code": ErrorCode.USER_NOT_FOUND.value,
-                        "message": f"User not found: {user_id}",
-                        "status": 404,
-                    }
-                },
-            )
+            raise _user_not_found(user_id)
 
         return UserResponse.model_validate(user)
 

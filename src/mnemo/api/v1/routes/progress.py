@@ -41,8 +41,9 @@ async def _get_target_user(db: AsyncSession, user_id: str) -> User:
             detail={
                 "error": {
                     "code": ErrorCode.USER_NOT_FOUND.value,
-                    "message": f"User not found: {user_id}",
+                    "message": "User not found.",
                     "status": HTTPStatusCode.NOT_FOUND,
+                    "resource": {"type": "user", "id": user_id},
                 }
             },
         )
@@ -96,8 +97,9 @@ async def get_deck_progress(
             detail={
                 "error": {
                     "code": ErrorCode.DECK_NOT_FOUND.value,
-                    "message": f"Deck not found: {deck_id}",
+                    "message": "Deck not found.",
                     "status": HTTPStatusCode.NOT_FOUND,
+                    "resource": {"type": "deck", "id": deck_id, "name": None},
                 }
             },
         )

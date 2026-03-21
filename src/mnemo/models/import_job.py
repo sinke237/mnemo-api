@@ -14,7 +14,7 @@ from sqlalchemy.types import JSON
 from mnemo.db.database import Base
 
 
-class ImportJob(Base):  # type: ignore[misc]
+class ImportJob(Base):
     """CSV import job table."""
 
     __tablename__ = "import_jobs"

@@ -53,7 +53,7 @@ class SessionService:
         )
         deck = result.scalar_one_or_none()
         if not deck:
-            raise DeckNotFoundError()
+            raise DeckNotFoundError(deck_id=session_data.deck_id)
 
         card_query = select(Flashcard).where(Flashcard.deck_id == deck.id)
 

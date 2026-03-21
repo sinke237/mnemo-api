@@ -13,7 +13,7 @@ from sqlalchemy.sql import func
 from mnemo.db.database import Base
 
 
-class APIKey(Base):  # type: ignore[misc]
+class APIKey(Base):
     """
     API Key table.
 

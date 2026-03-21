@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import UTC, date, datetime, timedelta
-from typing import Any, cast
+from typing import Any
 
 import pytz
 from sqlalchemy import case, func, select
@@ -103,10 +103,10 @@ def _resolve_local_time(dt: datetime | None, timezone_name: str) -> str | None:
     if not dt:
         return None
     try:
-        return cast(str, to_local_time(dt, timezone_name))
+        return to_local_time(dt, timezone_name)
     except Exception:
         try:
-            return cast(str, to_local_time(dt, "UTC"))
+            return to_local_time(dt, "UTC")
         except Exception:
             return None
 

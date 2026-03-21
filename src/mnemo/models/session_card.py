@@ -4,7 +4,7 @@ from sqlalchemy.orm import relationship
 from mnemo.db.database import Base
 
 
-class SessionCard(Base):  # type: ignore[misc]
+class SessionCard(Base):
     __tablename__ = "session_cards"
 
     id = Column(String(32), primary_key=True, index=True)

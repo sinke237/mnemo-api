@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from mnemo.models.session import Session
 
 
-class Deck(Base):  # type: ignore[misc]
+class Deck(Base):
     __tablename__ = "decks"
     __table_args__ = (
         UniqueConstraint("user_id", "name", name="uq_decks_user_name"),

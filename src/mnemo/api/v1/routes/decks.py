@@ -5,7 +5,7 @@ Per spec section 06: Decks.
 """
 
 import logging
-from typing import Literal, cast
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Response
 from fastapi.responses import JSONResponse
@@ -37,6 +37,17 @@ router = APIRouter(prefix="/decks", tags=["decks"])
 # module-level Depends singletons to satisfy ruff B008
 _db_dep = Depends(get_db)
 _current_user_dep = Depends(get_current_user_from_token)
+
+
+def _deck_not_found(deck_id: str | None, resource_name: str | None = None) -> JSONResponse:
+    return _error_response(
+        ErrorCode.DECK_NOT_FOUND,
+        "Deck not found.",
+        404,
+        resource_type="deck",
+        resource_id=deck_id,
+        resource_name=resource_name,
+    )
 
 
 @router.get(
@@ -140,7 +151,7 @@ async def get_deck(
 ) -> DeckResponse | JSONResponse:
     deck = await deck_service.get_deck_by_id(db, current_user.id, deck_id)
     if deck is None:
-        return _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404)
+        return _deck_not_found(deck_id)
     return DeckResponse.model_validate(deck)
 
 
@@ -171,8 +182,11 @@ async def replace_deck(
             description=deck_data.description,
             tags=deck_data.tags,
         )
-    except DeckNotFoundError:
-        return _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404)
+    except DeckNotFoundError as exc:
+        return _deck_not_found(
+            getattr(exc, "deck_id", None) or deck_id,
+            getattr(exc, "resource_name", None) or None,
+        )
     except DeckNameConflictError as exc:
         return _error_response(ErrorCode.DECK_NAME_CONFLICT, str(exc), 409)
 
@@ -206,8 +220,11 @@ async def update_deck(
             description=deck_data.description,
             tags=deck_data.tags,
         )
-    except DeckNotFoundError:
-        return _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404)
+    except DeckNotFoundError as exc:
+        return _deck_not_found(
+            getattr(exc, "deck_id", None) or deck_id,
+            getattr(exc, "resource_name", None) or None,
+        )
     except DeckNameConflictError as exc:
         return _error_response(ErrorCode.DECK_NAME_CONFLICT, str(exc), 409)
 
@@ -233,10 +250,10 @@ async def delete_deck(
 ) -> Response | JSONResponse:
     try:
         await deck_service.delete_deck(db, current_user.id, deck_id)
-    except DeckNotFoundError:
-        return cast(
-            Response,
-            _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404),
+    except DeckNotFoundError as exc:
+        return _deck_not_found(
+            getattr(exc, "deck_id", None) or deck_id,
+            getattr(exc, "resource_name", None) or None,
         )
     return Response(status_code=200)
 
@@ -267,8 +284,11 @@ async def list_cards_for_deck(
             page=page,
             per_page=per_page,
         )
-    except DeckNotFoundError:
-        return _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404)
+    except DeckNotFoundError as exc:
+        return _deck_not_found(
+            getattr(exc, "deck_id", None) or deck_id,
+            getattr(exc, "resource_name", None) or None,
+        )
 
     return FlashcardListResponse(
         data=[FlashcardResponse.model_validate(card) for card in cards],

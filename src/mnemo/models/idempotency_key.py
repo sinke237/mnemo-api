@@ -15,7 +15,7 @@ from sqlalchemy.types import JSON
 from mnemo.db.database import Base
 
 
-class IdempotencyKey(Base):  # type: ignore[misc]
+class IdempotencyKey(Base):
     """Idempotency key table."""
 
     __tablename__ = "idempotency_keys"
