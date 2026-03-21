@@ -5,18 +5,17 @@ Revises: f2c1b3a4d5e6
 Create Date: 2026-03-21 06:10:00.000000
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import ENUM as PgEnum
-
+from alembic import op
+from sqlalchemy.dialects.postgresql import ENUM
 
 # revision identifiers, used by Alembic.
 revision: str = "a1b2c3d4e6f7"
-down_revision: Union[str, Sequence[str], None] = "f2c1b3a4d5e6"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "f2c1b3a4d5e6"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -34,8 +33,8 @@ def upgrade() -> None:
         END $$;
     """))
 
-    sessionmode = PgEnum("review", "quiz", "exam", name="sessionmode", create_type=False)
-    sessionstatus = PgEnum("active", "ended", name="sessionstatus", create_type=False)
+    sessionmode = ENUM("review", "quiz", "exam", name="sessionmode", create_type=False)
+    sessionstatus = ENUM("active", "ended", name="sessionstatus", create_type=False)
 
     op.create_table(
         "sessions",
@@ -57,6 +56,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_sessions_user_id"), "sessions", ["user_id"], unique=False)
+    op.create_index(op.f("ix_sessions_deck_id"), "sessions", ["deck_id"], unique=False)
 
     op.create_table(
         "session_cards",
@@ -74,8 +74,24 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "session_id",
+            "card_id",
+            name="uq_session_cards_session_id_card_id",
+        ),
     )
-    op.create_index(op.f("ix_session_cards_session_id"), "session_cards", ["session_id"], unique=False)
+    op.create_index(
+        op.f("ix_session_cards_session_id"),
+        "session_cards",
+        ["session_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_session_cards_card_id"),
+        "session_cards",
+        ["card_id"],
+        unique=False,
+    )
 
     # Foreign keys
     op.create_foreign_key(
@@ -119,9 +135,13 @@ def downgrade() -> None:
     op.drop_constraint("fk_sessions_user_id_users", "sessions", type_="foreignkey")
 
     op.drop_index(op.f("ix_session_cards_session_id"), table_name="session_cards")
+    op.drop_index(op.f("ix_session_cards_card_id"), table_name="session_cards")
+    # Drop uniqueness constraint before dropping table for clean downgrade
+    op.drop_constraint("uq_session_cards_session_id_card_id", "session_cards", type_="unique")
     op.drop_table("session_cards")
 
     op.drop_index(op.f("ix_sessions_user_id"), table_name="sessions")
+    op.drop_index(op.f("ix_sessions_deck_id"), table_name="sessions")
     op.drop_table("sessions")
 
     # drop enums — DO block swallows undefined_object so reruns are safe

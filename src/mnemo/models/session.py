@@ -7,13 +7,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from mnemo.db.database import Base
 
 
-class SessionMode(str, enum.Enum):
+class SessionMode(enum.StrEnum):
     REVIEW = "review"
     QUIZ = "quiz"
     EXAM = "exam"
 
 
-class SessionStatus(str, enum.Enum):
+class SessionStatus(enum.StrEnum):
     ACTIVE = "active"
     ENDED = "ended"
 

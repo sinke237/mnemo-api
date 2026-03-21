@@ -57,6 +57,8 @@ async def answer_card(
         raise HTTPException(status_code=409, detail="Session has already ended.") from e
     except exc.AnswerTooLongError as e:
         raise HTTPException(status_code=422, detail="Answer is too long.") from e
+    except exc.NoCardsAvailableError as e:
+        raise HTTPException(status_code=409, detail="No cards available in this session.") from e
 
 
 @router.post("/{session_id}/skip")
@@ -73,6 +75,8 @@ async def skip_card(
         raise HTTPException(status_code=404, detail="Session not found.") from e
     except exc.SessionAlreadyEndedError as e:
         raise HTTPException(status_code=409, detail="Session has already ended.") from e
+    except exc.NoCardsAvailableError as e:
+        raise HTTPException(status_code=409, detail="No cards available in this session.") from e
 
 
 @router.post("/{session_id}/end")

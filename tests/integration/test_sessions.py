@@ -32,6 +32,7 @@ async def deck_and_cards(db: AsyncSession, authenticated_user):
     return deck, cards
 
 
+@pytest.mark.asyncio
 async def test_start_session_not_found(client: AsyncClient):
     response = await client.post(
         "/v1/sessions/",
@@ -40,6 +41,7 @@ async def test_start_session_not_found(client: AsyncClient):
     assert response.status_code == 404
 
 
+@pytest.mark.asyncio
 async def test_session_lifecycle(
     client: AsyncClient,
     db: AsyncSession,

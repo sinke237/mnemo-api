@@ -75,7 +75,42 @@ async def _process_job(
     if not job or job.status != ImportJobStatus.QUEUED.value:
         return False, False  # Not successful, not retriable
 
-    result_job = await import_service.process_import_job(db, job_id)
+    # Start a background periodic heartbeat while the job is processing so
+    # the worker doesn't appear dead during long-running imports.
+    heartbeat_interval = max(int(WORKER_HEARTBEAT_TTL / 2), 1)
+
+    async def _periodic_heartbeat(interval: int) -> None:
+        # Keep the loop running even if individual heartbeat writes or sleeps
+        # fail transiently. Propagate CancelledError so task cancellation
+        # still works as expected.
+        while True:
+            try:
+                await _write_heartbeat()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.warning("import_worker_periodic_heartbeat_write_failed")
+
+            try:
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.warning("import_worker_periodic_heartbeat_sleep_failed")
+
+    heartbeat_task: asyncio.Task[None] | None = None
+    try:
+        heartbeat_task = asyncio.create_task(_periodic_heartbeat(heartbeat_interval))
+        result_job = await import_service.process_import_job(db, job_id)
+    finally:
+        if heartbeat_task is not None:
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as exc:
+                logger.warning("import_worker_heartbeat_cancel_failed", error=str(exc))
 
     if result_job and result_job.status in {
         ImportJobStatus.COMPLETED.value,

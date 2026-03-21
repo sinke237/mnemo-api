@@ -117,7 +117,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 black src/ tests/
 
 # 3. Lint code (add --fix to auto-fix issues)
-ruff check src/ tests/
+ruff check src/ tests/ alembic/versions/
 
 # 4. Type check
 mypy src/mnemo/

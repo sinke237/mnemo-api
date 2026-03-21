@@ -36,6 +36,21 @@ async def test_health_check_variants(monkeypatch):
     assert resp.status == "degraded"
     assert resp.db == "unreachable"
 
+    # Worker heartbeat down variant: keep db and redis OK, but heartbeat reports down
+    async def worker_down():
+        return False
+
+    # restore db/redis to OK
+    monkeypatch.setattr("mnemo.api.v1.routes.health.check_db_connection", db_ok)
+    monkeypatch.setattr("mnemo.api.v1.routes.health.check_redis_connection", redis_ok)
+    monkeypatch.setattr("mnemo.api.v1.routes.health.check_worker_heartbeat", worker_down)
+
+    resp = await health_mod.health_check()
+    assert resp.worker == "unreachable"
+    assert resp.db == "ok"
+    assert resp.redis == "ok"
+    assert resp.status != "ok"
+
 
 def test_settings_jwt_validator_and_env_props():
     # Validates is_production / is_development properties

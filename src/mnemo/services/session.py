@@ -8,6 +8,7 @@ from sqlalchemy.orm import joinedload
 from mnemo.core.exceptions import (
     AnswerTooLongError,
     DeckNotFoundError,
+    NoCardsAvailableError,
     SessionAlreadyEndedError,
     SessionNotFoundError,
 )
@@ -56,20 +57,28 @@ class SessionService:
 
         card_query = select(Flashcard).where(Flashcard.deck_id == deck.id)
 
+        # Build a single join condition for CardMemoryState referencing the
+        # current user. Choose join type based on `due_only` so we can
+        # optionally filter for due cards only without adding conflicting
+        # duplicate joins.
+        join_condition = and_(
+            CardMemoryState.card_id == Flashcard.id,
+            CardMemoryState.user_id == self.user.id,
+        )
+
         if session_data.due_only:
-            card_query = card_query.join(CardMemoryState).where(
-                CardMemoryState.user_id == self.user.id,
+            # Inner join to require a memory row and filter by due_at
+            card_query = card_query.join(CardMemoryState, join_condition).where(
                 CardMemoryState.due_at <= datetime.utcnow(),
             )
+        else:
+            # Outer join so cards without memory rows are included
+            card_query = card_query.outerjoin(CardMemoryState, join_condition)
 
+        # Ordering: prefer weak cards by ease_factor when requested,
+        # otherwise randomize.
         if session_data.focus_weak:
-            card_query = card_query.outerjoin(
-                CardMemoryState,
-                and_(
-                    CardMemoryState.card_id == Flashcard.id,
-                    CardMemoryState.user_id == self.user.id,
-                ),
-            ).order_by(CardMemoryState.ease_factor.asc().nulls_last())
+            card_query = card_query.order_by(CardMemoryState.ease_factor.asc().nulls_last())
         else:
             card_query = card_query.order_by(func.random())
 
@@ -170,7 +179,7 @@ class SessionService:
         current_session_card = current_result.scalar_one_or_none()
 
         if not current_session_card:
-            raise Exception("No more cards to answer in this session.")
+            raise NoCardsAvailableError("No more cards to answer in this session.")
 
         score = self._evaluate_answer(answer_data.answer, current_session_card.card.answer)
         is_correct = score >= 3
@@ -250,7 +259,7 @@ class SessionService:
         current_session_card = current_result.scalar_one_or_none()
 
         if not current_session_card:
-            raise Exception("No more cards to skip in this session.")
+            raise NoCardsAvailableError("No more cards to skip in this session.")
 
         current_session_card.created_at = cast(Any, datetime.utcnow())
         await self.db.flush()

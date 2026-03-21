@@ -157,3 +157,9 @@ class AnswerTooLongError(SessionError):
     """Raised when a submitted answer exceeds the maximum allowed length."""
 
     pass
+
+
+class NoCardsAvailableError(SessionError):
+    """Raised when a session has no available cards to act on."""
+
+    pass

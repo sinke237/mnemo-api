@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mnemo.core.exceptions import (
     AnswerTooLongError,
     DeckNotFoundError,
+    NoCardsAvailableError,
     SessionAlreadyEndedError,
     SessionNotFoundError,
 )
@@ -76,7 +77,7 @@ async def test_answer_card_session_not_found(session_service, mock_db_session):
     answer_data = Answer(answer="test")
 
     with pytest.raises(SessionNotFoundError):
-        await session_service.answer_card(uuid.uuid4(), answer_data)
+        await session_service.answer_card(str(uuid.uuid4()), answer_data)
 
 
 @pytest.mark.asyncio
@@ -86,7 +87,7 @@ async def test_answer_card_session_already_ended(session_service, mock_db_sessio
     answer_data = Answer(answer="test")
 
     with pytest.raises(SessionAlreadyEndedError):
-        await session_service.answer_card(uuid.uuid4(), answer_data)
+        await session_service.answer_card(str(uuid.uuid4()), answer_data)
 
 
 @pytest.mark.asyncio
@@ -96,19 +97,19 @@ async def test_answer_card_answer_too_long(session_service, mock_db_session):
     answer_data = Answer.model_construct(answer="a" * 2001)
 
     with pytest.raises(AnswerTooLongError):
-        await session_service.answer_card(uuid.uuid4(), answer_data)
+        await session_service.answer_card(str(uuid.uuid4()), answer_data)
 
 
 @pytest.mark.asyncio
 async def test_skip_card_no_more_cards(session_service, mock_db_session):
-    session_id = uuid.uuid4()
+    session_id = str(uuid.uuid4())
     session = Session(id=session_id, status=SessionStatus.ACTIVE)
     mock_db_session.execute.side_effect = [
         _make_result(scalar=session),
         _make_result(scalar=None),
     ]
 
-    with pytest.raises(Exception, match="No more cards to skip"):
+    with pytest.raises(NoCardsAvailableError, match="No more cards to skip"):
         await session_service.skip_card(session_id)
 
 
@@ -117,7 +118,7 @@ async def test_end_session_not_found(session_service, mock_db_session):
     mock_db_session.execute.return_value = _make_result(scalar=None)
 
     with pytest.raises(SessionNotFoundError):
-        await session_service.end_session(uuid.uuid4())
+        await session_service.end_session(str(uuid.uuid4()))
 
 
 @pytest.mark.asyncio
@@ -125,11 +126,10 @@ async def test_get_session_summary_not_found(session_service, mock_db_session):
     mock_db_session.execute.return_value = _make_result(scalar=None)
 
     with pytest.raises(SessionNotFoundError):
-        await session_service.get_session_summary(uuid.uuid4())
+        await session_service.get_session_summary(str(uuid.uuid4()))
 
 
-@pytest.mark.asyncio
-async def test_evaluate_answer_logic(session_service):
+def test_evaluate_answer_logic(session_service):
     assert session_service._evaluate_answer("apple", "apple") == 5
     assert session_service._evaluate_answer("apple", "Apple") == 5
     assert session_service._evaluate_answer("orange", "apple") == 0
@@ -177,7 +177,7 @@ async def test_start_session_with_focus_weak(session_service, mock_db_session, m
 
 @pytest.mark.asyncio
 async def test_answer_card_no_more_cards(session_service, mock_db_session):
-    session_id = uuid.uuid4()
+    session_id = str(uuid.uuid4())
     session = Session(id=session_id, status=SessionStatus.ACTIVE)
     mock_db_session.execute.side_effect = [
         _make_result(scalar=session),
@@ -185,5 +185,5 @@ async def test_answer_card_no_more_cards(session_service, mock_db_session):
     ]
     answer_data = Answer(answer="test")
 
-    with pytest.raises(Exception, match="No more cards to answer"):
+    with pytest.raises(NoCardsAvailableError, match="No more cards to answer"):
         await session_service.answer_card(session_id, answer_data)
