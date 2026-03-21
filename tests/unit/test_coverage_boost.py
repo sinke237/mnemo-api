@@ -14,14 +14,19 @@ async def test_health_check_variants(monkeypatch):
     async def redis_ok():
         return True
 
+    async def worker_ok():
+        return True
+
     # Patch the functions that `health_check` actually references
     monkeypatch.setattr("mnemo.api.v1.routes.health.check_db_connection", db_ok)
     monkeypatch.setattr("mnemo.api.v1.routes.health.check_redis_connection", redis_ok)
+    monkeypatch.setattr("mnemo.api.v1.routes.health.check_worker_heartbeat", worker_ok)
 
     resp = await health_mod.health_check()
     assert resp.status == "ok"
     assert resp.db == "ok"
     assert resp.redis == "ok"
+    assert resp.worker == "ok"
 
     async def db_down():
         return False

@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.core.exceptions import IdempotencyConflictError
+from mnemo.db.database import AsyncSessionLocal
 from mnemo.models.idempotency_key import IdempotencyKey
 
 IDEMPOTENCY_TTL = timedelta(hours=24)
@@ -73,17 +74,22 @@ async def store_idempotency_record(
         status_code=status_code,
         response_body=response_body,
     )
-    db.add(record)
-    try:
-        await db.flush()
-    except IntegrityError:
-        # Another request stored it concurrently; fetch and return existing
-        await db.rollback()
-        existing = await get_idempotency_record(db, user_id, endpoint, key)
-        if existing is None:
-            raise
-        return existing
-    return record
+    # Persist idempotency records in an independent session so failures do not
+    # rollback the caller's transactional work (e.g., created Decks/Flashcards).
+    async with AsyncSessionLocal() as session:  # separate DB session
+        try:
+            session.add(record)
+            await session.flush()
+            await session.commit()
+            await session.refresh(record)
+            return record
+        except IntegrityError:
+            await session.rollback()
+            # Another request stored it concurrently; fetch and return existing
+            existing = await get_idempotency_record(session, user_id, endpoint, key)
+            if existing is None:
+                raise
+            return existing
 
 
 async def reserve_idempotency_record(

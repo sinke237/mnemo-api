@@ -1,14 +1,13 @@
 from typing import Annotated, Any
-from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 
-from src.mnemo.api.dependencies import current_user_dep, db_dep
-from src.mnemo.core import exceptions as exc
-from src.mnemo.models import User
-from src.mnemo.schemas import session as session_schema
-from src.mnemo.services.session import SessionService
+from mnemo.api.dependencies import current_user_dep, db_dep
+from mnemo.core import exceptions as exc
+from mnemo.models import User
+from mnemo.schemas import session as session_schema
+from mnemo.services.session import SessionService
 
 router = APIRouter()
 
@@ -29,21 +28,21 @@ async def start_session(
 
 @router.get("/{session_id}", response_model=session_schema.Session)
 async def get_session(
-    session_id: UUID,
+    session_id: str,
     db: Annotated[Session, db_dep],
     current_user: Annotated[User, current_user_dep],
 ) -> session_schema.Session:
     """Gets the current state of a session."""
     service = SessionService(db, current_user)
     try:
-        return await service.get_session(str(session_id))
+        return await service.get_session(session_id)
     except exc.SessionNotFoundError as e:
         raise HTTPException(status_code=404, detail="Session not found.") from e
 
 
 @router.post("/{session_id}/answer", response_model=session_schema.AnswerResult)
 async def answer_card(
-    session_id: UUID,
+    session_id: str,
     answer_data: session_schema.Answer,
     db: Annotated[Session, db_dep],
     current_user: Annotated[User, current_user_dep],
@@ -51,7 +50,7 @@ async def answer_card(
     """Submits an answer for the current card in a session."""
     service = SessionService(db, current_user)
     try:
-        return await service.answer_card(str(session_id), answer_data)
+        return await service.answer_card(session_id, answer_data)
     except exc.SessionNotFoundError as e:
         raise HTTPException(status_code=404, detail="Session not found.") from e
     except exc.SessionAlreadyEndedError as e:
@@ -62,14 +61,14 @@ async def answer_card(
 
 @router.post("/{session_id}/skip")
 async def skip_card(
-    session_id: UUID,
+    session_id: str,
     db: Annotated[Session, db_dep],
     current_user: Annotated[User, current_user_dep],
 ) -> dict[str, Any]:
     """Skips the current card in a session."""
     service = SessionService(db, current_user)
     try:
-        return await service.skip_card(str(session_id))
+        return await service.skip_card(session_id)  # type: ignore[no-any-return]
     except exc.SessionNotFoundError as e:
         raise HTTPException(status_code=404, detail="Session not found.") from e
     except exc.SessionAlreadyEndedError as e:
@@ -78,14 +77,14 @@ async def skip_card(
 
 @router.post("/{session_id}/end")
 async def end_session(
-    session_id: UUID,
+    session_id: str,
     db: Annotated[Session, db_dep],
     current_user: Annotated[User, current_user_dep],
 ) -> dict[str, str]:
     """Ends a session early."""
     service = SessionService(db, current_user)
     try:
-        return await service.end_session(str(session_id))
+        return await service.end_session(session_id)  # type: ignore[no-any-return]
     except exc.SessionNotFoundError as e:
         raise HTTPException(status_code=404, detail="Session not found.") from e
     except exc.SessionAlreadyEndedError as e:
@@ -94,13 +93,13 @@ async def end_session(
 
 @router.get("/{session_id}/summary", response_model=session_schema.SessionSummary)
 async def get_session_summary(
-    session_id: UUID,
+    session_id: str,
     db: Annotated[Session, db_dep],
     current_user: Annotated[User, current_user_dep],
 ) -> session_schema.SessionSummary:
     """Gets the summary of a completed session."""
     service = SessionService(db, current_user)
     try:
-        return await service.get_session_summary(str(session_id))
+        return await service.get_session_summary(session_id)
     except exc.SessionNotFoundError as e:
         raise HTTPException(status_code=404, detail="Session not found.") from e

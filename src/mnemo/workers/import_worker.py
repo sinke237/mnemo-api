@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.core.constants import ImportJobStatus
 from mnemo.db.database import AsyncSessionLocal
-from mnemo.db.redis import get_redis
+from mnemo.db.redis import WORKER_HEARTBEAT_KEY, WORKER_HEARTBEAT_TTL, get_redis
 from mnemo.models.deck import Deck  # noqa: F401 - Register Deck model with Base
 from mnemo.models.import_job import ImportJob
 from mnemo.models.user import User  # noqa: F401 - Register User model with Base
@@ -127,6 +127,14 @@ async def _process_db_job() -> bool:
     return False
 
 
+async def _write_heartbeat() -> None:
+    try:
+        redis = get_redis()
+        await redis.set(WORKER_HEARTBEAT_KEY, "1", ex=WORKER_HEARTBEAT_TTL)
+    except Exception as exc:
+        logger.warning("import_worker_heartbeat_failed", error=str(exc))
+
+
 async def run_worker(poll_interval: float = 1.0) -> None:
     logger.info("import_worker_starting")
     async with AsyncSessionLocal() as db:
@@ -135,6 +143,7 @@ async def run_worker(poll_interval: float = 1.0) -> None:
 
     while True:
         try:
+            await _write_heartbeat()
             if await _process_redis_job():
                 continue
 

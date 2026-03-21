@@ -4,6 +4,7 @@ Implements deck CRUD and deck card listing.
 Per spec section 06: Decks.
 """
 
+import logging
 from typing import Literal, cast
 
 from fastapi import APIRouter, Depends, Header, Query, Response
@@ -29,6 +30,8 @@ from mnemo.schemas.flashcard import FlashcardListResponse, FlashcardResponse
 from mnemo.services import deck as deck_service
 from mnemo.services import flashcard as flashcard_service
 from mnemo.services import idempotency as idempotency_service
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/decks", tags=["decks"])
 # module-level Depends singletons to satisfy ruff B008

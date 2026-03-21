@@ -2,59 +2,27 @@
 Integration tests for CSV import flow.
 """
 
-from collections.abc import AsyncIterator
-
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.core.constants import PermissionScope
 from mnemo.db.database import AsyncSessionLocal
-from mnemo.models.card_memory_state import CardMemoryState
-from mnemo.models.deck import Deck
-from mnemo.models.flashcard import Flashcard
-from mnemo.models.import_job import ImportJob
 from mnemo.models.user import User
-from mnemo.schemas.user import UserCreate
 from mnemo.services import import_job as import_service
 from mnemo.services.api_key import create_api_key
-from mnemo.services.user import create_user
 
 
 @pytest.fixture
-async def db_session() -> AsyncIterator[AsyncSession]:
-    async with AsyncSessionLocal() as session:
-        await session.execute(delete(CardMemoryState))
-        await session.execute(delete(Flashcard))
-        await session.execute(delete(ImportJob))
-        await session.execute(delete(Deck))
-        await session.execute(delete(User))
-        await session.commit()
-        yield session
-        await session.execute(delete(CardMemoryState))
-        await session.execute(delete(Flashcard))
-        await session.execute(delete(ImportJob))
-        await session.execute(delete(Deck))
-        await session.execute(delete(User))
-        await session.commit()
-
-
-@pytest.fixture
-async def user_token(db_session: AsyncSession, client: AsyncClient) -> tuple[User, str]:
-    user_data = UserCreate(
-        display_name="Import User",
-        country="US",
-        timezone="America/New_York",
-        locale="en-US",
-        preferred_language="en",
-        daily_goal_cards=20,
-    )
-    user = await create_user(db_session, user_data)
+async def user_token(
+    db: AsyncSession, client: AsyncClient, authenticated_user: User
+) -> tuple[User, str]:
+    db.add(authenticated_user)
+    await db.flush()
 
     _, plain_key = await create_api_key(
-        db=db_session,
-        user_id=user.id,
+        db=db,
+        user_id=authenticated_user.id,
         name="Import Key",
         is_live=False,
         scopes=[
@@ -63,15 +31,15 @@ async def user_token(db_session: AsyncSession, client: AsyncClient) -> tuple[Use
             PermissionScope.DECKS_WRITE,
         ],
     )
-    await db_session.commit()
+    await db.flush()
 
     token_response = await client.post(
         "/v1/auth/token",
-        json={"user_id": user.id, "api_key": plain_key},
+        json={"user_id": authenticated_user.id, "api_key": plain_key},
     )
     assert token_response.status_code == 200
     token = token_response.json()["access_token"]
-    return user, token
+    return authenticated_user, token
 
 
 async def _process_job(job_id: str) -> None:
@@ -217,9 +185,9 @@ async def test_csv_import_oversized_file_rejected(
 @pytest.mark.parametrize(
     "csv_text",
     [
-        "Q1,A1\nQ2,A2",  # Comma
-        "Q1;A1\nQ2;A2",  # Semicolon
-        "Q1\tA1\nQ2\tA2",  # Tab
+        "Q1,A1\nQ2,A2",
+        "Q1;A1\nQ2;A2",
+        "Q1\tA1\nQ2\tA2",
     ],
 )
 async def test_csv_import_with_different_delimiters(

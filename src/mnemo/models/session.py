@@ -1,12 +1,10 @@
 import enum
 from datetime import datetime
-from uuid import UUID as PY_UUID
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.mnemo.db.database import Base
+from mnemo.db.database import Base
 
 
 class SessionMode(str, enum.Enum):
@@ -20,19 +18,24 @@ class SessionStatus(str, enum.Enum):
     ENDED = "ended"
 
 
-class Session(Base):
+class Session(Base):  # type: ignore[misc]
     __tablename__ = "sessions"
 
-    id: Mapped[PY_UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, index=True)
-    user_id: Mapped[PY_UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    deck_id: Mapped[PY_UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("decks.id"), nullable=False
+    deck_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("decks.id", ondelete="CASCADE"), nullable=False
     )
-    mode: Mapped[SessionMode] = mapped_column(Enum(SessionMode), nullable=False)
+    mode: Mapped[SessionMode] = mapped_column(
+        Enum(SessionMode, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
     status: Mapped[SessionStatus] = mapped_column(
-        Enum(SessionStatus), default=SessionStatus.ACTIVE, nullable=False
+        Enum(SessionStatus, values_callable=lambda x: [e.value for e in x]),
+        default=SessionStatus.ACTIVE,
+        nullable=False,
     )
     card_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     time_limit_s: Mapped[int | None] = mapped_column(Integer, nullable=True)

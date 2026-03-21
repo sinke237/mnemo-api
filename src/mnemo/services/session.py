@@ -1,18 +1,17 @@
 from datetime import datetime, timedelta
 from typing import Any, cast
-from uuid import uuid4
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 from sqlalchemy.orm import joinedload
 
-from src.mnemo.core.exceptions import (
+from mnemo.core.exceptions import (
     AnswerTooLongError,
     DeckNotFoundError,
     SessionAlreadyEndedError,
     SessionNotFoundError,
 )
-from src.mnemo.models import (
+from mnemo.models import (
     CardMemoryState,
     Deck,
     Flashcard,
@@ -20,21 +19,23 @@ from src.mnemo.models import (
     SessionCard,
     User,
 )
-from src.mnemo.models.session import SessionStatus
-from src.mnemo.schemas.session import (
+from mnemo.models.session import SessionStatus
+from mnemo.schemas.session import (
     Answer,
     AnswerResult,
+    FlashcardInSession,
     SessionStart,
     SessionSummary,
 )
-from src.mnemo.schemas.session import (
+from mnemo.schemas.session import (
     Session as SessionSchema,
 )
-from src.mnemo.services.spaced_repetition import (
+from mnemo.services.spaced_repetition import (
     get_or_create_memory_state,
     update_memory_state_after_answer,
 )
-from src.mnemo.utils.local_time import to_local_time
+from mnemo.utils.id_generator import generate_session_id
+from mnemo.utils.local_time import to_local_time
 
 
 class SessionService:
@@ -78,7 +79,7 @@ class SessionService:
         cards_result = await self.db.execute(card_query)
         cards = list(cards_result.scalars().all())
 
-        session_id = uuid4()
+        session_id = generate_session_id()
         expires_at = datetime.utcnow() + timedelta(hours=2)
 
         session = Session(
@@ -95,7 +96,11 @@ class SessionService:
 
         session_cards = []
         for card in cards:
-            session_card = SessionCard(id=uuid4(), session_id=session_id, card_id=card.id)
+            session_card = SessionCard(
+                id=generate_session_id(),
+                session_id=session_id,
+                card_id=card.id,
+            )
             session_cards.append(session_card)
         self.db.add_all(session_cards)
 
@@ -144,9 +149,7 @@ class SessionService:
 
     async def answer_card(self, session_id: str, answer_data: Answer) -> AnswerResult:
         result = await self.db.execute(
-            select(Session)
-            .options(joinedload(Session.cards).joinedload(SessionCard.card))
-            .where(Session.id == session_id, Session.user_id == self.user.id)
+            select(Session).where(Session.id == session_id, Session.user_id == self.user.id)
         )
         session = result.scalar_one_or_none()
 
@@ -159,6 +162,7 @@ class SessionService:
 
         current_result = await self.db.execute(
             select(SessionCard)
+            .options(joinedload(SessionCard.card))
             .where(SessionCard.session_id == session.id, ~SessionCard.answered)
             .order_by(SessionCard.created_at)
             .limit(1)
@@ -184,6 +188,7 @@ class SessionService:
 
         next_result = await self.db.execute(
             select(SessionCard)
+            .options(joinedload(SessionCard.card))
             .where(SessionCard.session_id == session.id, ~SessionCard.answered)
             .order_by(SessionCard.created_at)
             .limit(1)
@@ -252,13 +257,17 @@ class SessionService:
 
         next_result = await self.db.execute(
             select(SessionCard)
+            .options(joinedload(SessionCard.card))
             .where(SessionCard.session_id == session.id, ~SessionCard.answered)
             .order_by(SessionCard.created_at)
             .limit(1)
         )
         next_session_card = next_result.scalar_one_or_none()
 
-        return {"next_card": next_session_card.card if next_session_card else None}
+        next_card = (
+            FlashcardInSession.model_validate(next_session_card.card) if next_session_card else None
+        )
+        return {"next_card": next_card}
 
     async def end_session(self, session_id: str) -> dict[str, str]:
         result = await self.db.execute(
@@ -268,12 +277,11 @@ class SessionService:
 
         if not session:
             raise SessionNotFoundError()
-        if session.status == SessionStatus.ENDED:
-            raise SessionAlreadyEndedError()
 
-        session.status = SessionStatus.ENDED
-        session.ended_at = cast(Any, datetime.utcnow())
-        await self.db.flush()
+        if session.status != SessionStatus.ENDED:
+            session.status = SessionStatus.ENDED
+            session.ended_at = cast(Any, datetime.utcnow())
+            await self.db.flush()
 
         return {"message": "Session ended successfully."}
 
@@ -296,6 +304,7 @@ class SessionService:
 
         current_result = await self.db.execute(
             select(SessionCard)
+            .options(joinedload(SessionCard.card))
             .where(SessionCard.session_id == session.id, ~SessionCard.answered)
             .order_by(SessionCard.created_at)
             .limit(1)
