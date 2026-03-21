@@ -13,18 +13,19 @@ from mnemo.api.v1.routes import (
     health,
     imports,
     memory_states,
+    progress,
     sessions,
     users,
 )
 
 router = APIRouter(prefix="/v1")
-
 router.include_router(health.router)
-router.include_router(countries.router)
 router.include_router(auth.router)
 router.include_router(users.router)
+router.include_router(countries.router)
 router.include_router(imports.router)
-router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
 router.include_router(decks.router)
 router.include_router(cards.router)
 router.include_router(memory_states.router)
+router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
+router.include_router(progress.router)

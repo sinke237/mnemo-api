@@ -7,13 +7,10 @@ from datetime import datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.core.constants import PermissionScope
-from mnemo.db.database import AsyncSessionLocal
 from mnemo.main import app
-from mnemo.models.api_key import APIKey
 from mnemo.models.user import User
 from mnemo.schemas.user import UserCreate
 from mnemo.services.api_key import create_api_key
@@ -27,21 +24,6 @@ def _parse_iso_datetime(value: str) -> datetime:
     if value.endswith("Z"):
         value = value.replace("Z", "+00:00")
     return datetime.fromisoformat(value)
-
-
-@pytest.fixture
-async def db_session() -> AsyncSession:
-    """Provide a database session for tests."""
-    async with AsyncSessionLocal() as session:
-        # Cleanup before each test
-        await session.execute(delete(APIKey))
-        await session.execute(delete(User))
-        await session.commit()
-        yield session
-        # Cleanup: delete all test data after each test
-        await session.execute(delete(APIKey))
-        await session.execute(delete(User))
-        await session.commit()
 
 
 @pytest.fixture
