@@ -4,6 +4,7 @@ Implements flashcard CRUD.
 Per spec section 07: Flashcards.
 """
 
+import re
 from typing import cast
 
 from fastapi import APIRouter, Depends, Header, Response
@@ -95,7 +96,11 @@ async def create_card(
             return JSONResponse(status_code=record.status_code, content=record.response_body)
         except DeckNotFoundError:
             return _error_response(
-                ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404
+                ErrorCode.DECK_NOT_FOUND,
+                "Deck not found.",
+                404,
+                resource_type="deck",
+                resource_id=deck_id,
             )
 
     try:
@@ -112,7 +117,13 @@ async def create_card(
             ),
         )
     except DeckNotFoundError:
-        return _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404)
+        return _error_response(
+            ErrorCode.DECK_NOT_FOUND,
+            "Deck not found.",
+            404,
+            resource_type="deck",
+            resource_id=deck_id,
+        )
 
     return FlashcardResponse.model_validate(card)
 
@@ -135,7 +146,13 @@ async def get_card(
 ) -> FlashcardResponse | JSONResponse:
     card = await flashcard_service.get_card_by_id(db, current_user.id, card_id)
     if card is None:
-        return _error_response(ErrorCode.CARD_NOT_FOUND, f"No card found with ID {card_id}.", 404)
+        return _error_response(
+            ErrorCode.CARD_NOT_FOUND,
+            "Card not found.",
+            404,
+            resource_type="card",
+            resource_id=card_id,
+        )
     return FlashcardResponse.model_validate(card)
 
 
@@ -169,9 +186,25 @@ async def replace_card(
             difficulty=card_data.difficulty,
         )
     except CardNotFoundError:
-        return _error_response(ErrorCode.CARD_NOT_FOUND, f"No card found with ID {card_id}.", 404)
+        return _error_response(
+            ErrorCode.CARD_NOT_FOUND,
+            "Card not found.",
+            404,
+            resource_type="card",
+            resource_id=card_id,
+        )
     except DeckNotFoundError as exc:
-        return _error_response(ErrorCode.DECK_NOT_FOUND, str(exc), 404)
+        # Try to extract deck id from the exception message, if present.
+        exc_txt = str(exc) or ""
+        m = re.search(r"(dck_[0-9A-Za-z_\-]+)", exc_txt)
+        deck_id_from_exc = m.group(1) if m else None
+        return _error_response(
+            ErrorCode.DECK_NOT_FOUND,
+            "Deck not found.",
+            404,
+            resource_type="deck",
+            resource_id=deck_id_from_exc,
+        )
 
     return FlashcardResponse.model_validate(card)
 
@@ -206,7 +239,13 @@ async def update_card(
             difficulty=card_data.difficulty,
         )
     except CardNotFoundError:
-        return _error_response(ErrorCode.CARD_NOT_FOUND, f"No card found with ID {card_id}.", 404)
+        return _error_response(
+            ErrorCode.CARD_NOT_FOUND,
+            "Card not found.",
+            404,
+            resource_type="card",
+            resource_id=card_id,
+        )
     except DeckNotFoundError as exc:
         return _error_response(ErrorCode.DECK_NOT_FOUND, str(exc), 404)
 
@@ -235,7 +274,13 @@ async def delete_card(
     except CardNotFoundError:
         return cast(
             Response,
-            _error_response(ErrorCode.CARD_NOT_FOUND, f"No card found with ID {card_id}.", 404),
+            _error_response(
+                ErrorCode.CARD_NOT_FOUND,
+                "Card not found.",
+                404,
+                resource_type="card",
+                resource_id=card_id,
+            ),
         )
     except DeckNotFoundError as exc:
         return cast(Response, _error_response(ErrorCode.DECK_NOT_FOUND, str(exc), 404))

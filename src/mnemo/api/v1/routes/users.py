@@ -136,8 +136,9 @@ async def get_user(
             detail={
                 "error": {
                     "code": ErrorCode.USER_NOT_FOUND.value,
-                    "message": f"User not found: {user_id}",
+                    "message": "User not found.",
                     "status": 404,
+                    "resource": {"type": "user", "id": user_id},
                 }
             },
         )
@@ -193,8 +194,9 @@ async def update_user(
                 detail={
                     "error": {
                         "code": ErrorCode.USER_NOT_FOUND.value,
-                        "message": f"User not found: {user_id}",
+                        "message": "User not found.",
                         "status": 404,
+                        "resource": {"type": "user", "id": user_id},
                     }
                 },
             )

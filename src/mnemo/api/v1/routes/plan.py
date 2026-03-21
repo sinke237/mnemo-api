@@ -46,8 +46,9 @@ async def _get_target_user(db: AsyncSession, user_id: str) -> User:
             detail={
                 "error": {
                     "code": ErrorCode.USER_NOT_FOUND.value,
-                    "message": f"User not found: {user_id}",
+                    "message": "User not found.",
                     "status": HTTPStatusCode.NOT_FOUND,
+                    "resource": {"type": "user", "id": user_id},
                 }
             },
         )
@@ -95,8 +96,9 @@ async def create_plan(
             detail={
                 "error": {
                     "code": ErrorCode.DECK_NOT_FOUND.value,
-                    "message": f"Deck not found: {body.deck_id}",
+                    "message": "Deck not found.",
                     "status": HTTPStatusCode.NOT_FOUND,
+                    "resource": {"type": "deck", "id": body.deck_id},
                 }
             },
         ) from err
@@ -142,8 +144,9 @@ async def get_plan(
             detail={
                 "error": {
                     "code": ErrorCode.PLAN_NOT_FOUND.value,
-                    "message": f"No active study plan for user: {user_id}",
+                    "message": "No active study plan for user.",
                     "status": HTTPStatusCode.NOT_FOUND,
+                    "resource": {"type": "user", "id": user_id},
                 }
             },
         ) from err

@@ -129,8 +129,9 @@ async def get_current_user_from_token(
             detail={
                 "error": {
                     "code": ErrorCode.INVALID_TOKEN.value,
-                    "message": f"User not found: {user_id}",
+                    "message": "User not found.",
                     "status": 401,
+                    "resource": {"type": "user", "id": user_id},
                 }
             },
         )

@@ -104,8 +104,10 @@ async def import_csv(
         if deck is None:
             return _error_response(
                 ErrorCode.DECK_NOT_FOUND,
-                f"No deck found with ID {deck_id}.",
+                "Deck not found.",
                 HTTPStatusCode.NOT_FOUND,
+                resource_type="deck",
+                resource_id=deck_id,
             )
     else:
         if not deck_name:
@@ -174,8 +176,10 @@ async def get_import_job(
     if job is None:
         return _error_response(
             ErrorCode.IMPORT_JOB_NOT_FOUND,
-            f"No job found with ID {job_id}.",
+            "Import job not found.",
             HTTPStatusCode.NOT_FOUND,
+            resource_type="import_job",
+            resource_id=job_id,
         )
 
     completed_local = (

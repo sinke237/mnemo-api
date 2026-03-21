@@ -140,7 +140,13 @@ async def get_deck(
 ) -> DeckResponse | JSONResponse:
     deck = await deck_service.get_deck_by_id(db, current_user.id, deck_id)
     if deck is None:
-        return _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404)
+        return _error_response(
+            ErrorCode.DECK_NOT_FOUND,
+            "Deck not found.",
+            404,
+            resource_type="deck",
+            resource_id=deck_id,
+        )
     return DeckResponse.model_validate(deck)
 
 
@@ -172,7 +178,13 @@ async def replace_deck(
             tags=deck_data.tags,
         )
     except DeckNotFoundError:
-        return _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404)
+        return _error_response(
+            ErrorCode.DECK_NOT_FOUND,
+            "Deck not found.",
+            404,
+            resource_type="deck",
+            resource_id=deck_id,
+        )
     except DeckNameConflictError as exc:
         return _error_response(ErrorCode.DECK_NAME_CONFLICT, str(exc), 409)
 
@@ -207,7 +219,13 @@ async def update_deck(
             tags=deck_data.tags,
         )
     except DeckNotFoundError:
-        return _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404)
+        return _error_response(
+            ErrorCode.DECK_NOT_FOUND,
+            "Deck not found.",
+            404,
+            resource_type="deck",
+            resource_id=deck_id,
+        )
     except DeckNameConflictError as exc:
         return _error_response(ErrorCode.DECK_NAME_CONFLICT, str(exc), 409)
 
@@ -236,7 +254,13 @@ async def delete_deck(
     except DeckNotFoundError:
         return cast(
             Response,
-            _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404),
+            _error_response(
+                ErrorCode.DECK_NOT_FOUND,
+                "Deck not found.",
+                404,
+                resource_type="deck",
+                resource_id=deck_id,
+            ),
         )
     return Response(status_code=200)
 
@@ -268,7 +292,13 @@ async def list_cards_for_deck(
             per_page=per_page,
         )
     except DeckNotFoundError:
-        return _error_response(ErrorCode.DECK_NOT_FOUND, f"No deck found with ID {deck_id}.", 404)
+        return _error_response(
+            ErrorCode.DECK_NOT_FOUND,
+            "Deck not found.",
+            404,
+            resource_type="deck",
+            resource_id=deck_id,
+        )
 
     return FlashcardListResponse(
         data=[FlashcardResponse.model_validate(card) for card in cards],
