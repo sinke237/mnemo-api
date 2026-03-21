@@ -37,7 +37,7 @@ def _today_in_timezone(timezone_name: str, now: datetime | None = None) -> date:
     """Return today's date in the user's local timezone."""
     try:
         tz = pytz.timezone(timezone_name)
-    except Exception:
+    except pytz.UnknownTimeZoneError:
         tz = pytz.utc
     if now is None:
         return datetime.now(tz).date()
