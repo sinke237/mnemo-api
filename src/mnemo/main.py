@@ -6,14 +6,16 @@ and handles application lifecycle events.
 """
 
 import uuid
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from mnemo.api.v1.router import router as v1_router
@@ -133,30 +135,92 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     )
 
 
-@app.exception_handler(FastAPIHTTPException)
-async def http_exception_handler(request: Request, exc: FastAPIHTTPException) -> JSONResponse:
-    request_id = getattr(request.state, "request_id", None)
-    if request_id is None:
-        request_id = f"req_{uuid.uuid4().hex[:8]}"
-    # Normalize FastAPIHTTPException detail to top-level {"error": ...} shape.
-    detail = exc.detail
+# Centralized HTTP error normalization
+_DetailType = Mapping[str, object] | Sequence[object] | str | int | float | None
+
+
+def _normalize_error_detail(
+    request: Request, detail: _DetailType, status: int
+) -> dict[str, object]:
+    request_id = getattr(request.state, "request_id", None) or f"req_{uuid.uuid4().hex[:8]}"
+
+    # Preserve structured dict details where possible
     if isinstance(detail, dict):
         if "error" in detail and isinstance(detail["error"], dict):
-            error = detail["error"]
+            error = dict(detail["error"])  # copy to avoid mutating original
         else:
-            # Preserve structured dict details by using it directly as the error
-            error = detail
+            error = dict(detail)
+    elif isinstance(detail, list):
+        error = {"message": "Validation error", "detail": detail}
     else:
         error = {"message": str(detail)}
 
-    # Ensure request_id present in response body
-    error.setdefault("request_id", request_id)
+    # Derive canonical code
+    code = None
+    if isinstance(error, dict):
+        code = error.get("code")
 
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"error": error},
-        headers={"X-Request-ID": request_id},
+    if not code:
+        canonical = {
+            404: "NOT_FOUND",
+            405: "METHOD_NOT_ALLOWED",
+            422: "VALIDATION_ERROR",
+            500: "INTERNAL_ERROR",
+            403: "HTTP_NOT_ALLOWED",
+        }
+        code = canonical.get(int(status), f"HTTP_{int(status)}")
+
+    # Ensure fields
+    error["code"] = str(code)
+    error["message"] = str(error.get("message", ""))
+    error["status"] = int(status)
+    error["request_id"] = request_id
+
+    return error
+
+
+def _build_response_from_exception(
+    request: Request, exc: Exception, status: int, detail: _DetailType
+) -> JSONResponse:
+    # Merge headers instead of replacing them
+    exc_headers = getattr(exc, "headers", None) or {}
+    error = _normalize_error_detail(request, detail, status)
+    request_id = error["request_id"]
+    headers = {**exc_headers, "X-Request-ID": request_id}
+    return JSONResponse(status_code=int(status), content={"error": error}, headers=headers)
+
+
+@app.exception_handler(FastAPIHTTPException)
+async def fastapi_http_exception_handler(
+    request: Request, exc: FastAPIHTTPException
+) -> JSONResponse:
+    return _build_response_from_exception(
+        request, exc, getattr(exc, "status_code", 500), exc.detail
     )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def starlette_http_exception_handler(
+    request: Request, exc: StarletteHTTPException
+) -> JSONResponse:
+    return _build_response_from_exception(
+        request, exc, getattr(exc, "status_code", 500), exc.detail
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    # RequestValidationError doesn't always carry a status_code attribute
+    status = getattr(exc, "status_code", 422)
+    # Preserve the validation errors list if available
+    detail = getattr(exc, "errors", None)
+    if callable(detail):
+        detail = exc.errors()
+    if detail is None:
+        detail = getattr(exc, "detail", str(exc))
+    return _build_response_from_exception(request, exc, status, detail)
 
 
 # ── Routers ────────────────────────────────────────────────────────────────────

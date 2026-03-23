@@ -1,6 +1,5 @@
 import logging
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -13,16 +12,16 @@ from mnemo.main import app
 from mnemo.models import User
 
 
-def create_mock_redis() -> AsyncMock:
-    """Create a mock Redis client with common method returns configured."""
-    mock_redis = AsyncMock()
-    mock_redis.ping.return_value = True
-    mock_redis.incr.return_value = 1
-    mock_redis.eval.return_value = 1
-    mock_redis.expire.return_value = True
-    mock_redis.rpush.return_value = 1
-    mock_redis.blpop.return_value = None
-    return mock_redis
+def create_mock_redis():
+    """Return a stateful fake Redis client for tests.
+
+    Uses the simple in-memory `FakeRedis` so tests observe counter
+    growth, `rpush`/`blpop` queue behavior, and realistic `incr`/`eval` results.
+    """
+    # Import here to avoid import-time test package resolution issues
+    from tests.helpers.fake_redis import FakeRedis
+
+    return FakeRedis()
 
 
 @pytest.fixture(scope="function", autouse=True)
