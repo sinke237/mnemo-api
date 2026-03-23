@@ -113,7 +113,7 @@ async def test_get_single_country_not_found() -> None:
 
     assert response.status_code == 404
     error_data = response.json()
-    assert error_data["detail"]["error"]["code"] == "INVALID_COUNTRY_CODE"
+    assert error_data["error"]["code"] == "INVALID_COUNTRY_CODE"
 
 
 @pytest.mark.asyncio

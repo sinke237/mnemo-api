@@ -46,4 +46,4 @@ async def test_deck_progress_not_found_returns_404(db_session: AsyncSession) -> 
         )
         assert resp.status_code == 404
         payload = resp.json()
-        assert payload["detail"]["error"]["code"] == ErrorCode.DECK_NOT_FOUND.value
+        assert payload["error"]["code"] == ErrorCode.DECK_NOT_FOUND.value

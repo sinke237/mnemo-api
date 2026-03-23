@@ -196,7 +196,7 @@ async def test_regular_user_cannot_access_other_users(
         )
         assert profile_response.status_code == 403
         error_data = profile_response.json()
-        assert error_data["detail"]["error"]["code"] == "INSUFFICIENT_SCOPE"
+        assert error_data["error"]["code"] == "INSUFFICIENT_SCOPE"
 
 
 @pytest.mark.asyncio
@@ -213,7 +213,7 @@ async def test_invalid_api_key_rejected() -> None:
         )
         assert response.status_code == 401
         error_data = response.json()
-        assert error_data["detail"]["error"]["code"] == "INVALID_API_KEY"
+        assert error_data["error"]["code"] == "INVALID_API_KEY"
 
 
 @pytest.mark.asyncio
@@ -228,7 +228,7 @@ async def test_invalid_jwt_rejected(regular_user_with_key: tuple[User, str]) -> 
         )
         assert response.status_code == 401
         error_data = response.json()
-        assert error_data["detail"]["error"]["code"] == "INVALID_TOKEN"
+        assert error_data["error"]["code"] == "INVALID_TOKEN"
 
 
 @pytest.mark.asyncio
@@ -248,7 +248,7 @@ async def test_expired_jwt_rejected(regular_user_with_key: tuple[User, str]) -> 
         )
         assert response.status_code == 401
         error_data = response.json()
-        assert error_data["detail"]["error"]["code"] == "TOKEN_EXPIRED"
+        assert error_data["error"]["code"] == "TOKEN_EXPIRED"
 
 
 @pytest.mark.asyncio
@@ -260,7 +260,7 @@ async def test_missing_authorization_header(regular_user_with_key: tuple[User, s
         response = await client.get(f"/v1/users/{user.id}")
         assert response.status_code == 401
         error_data = response.json()
-        assert error_data["detail"]["error"]["code"] == "INVALID_TOKEN"
+        assert error_data["error"]["code"] == "INVALID_TOKEN"
 
 
 @pytest.mark.asyncio
@@ -283,7 +283,7 @@ async def test_create_user_requires_admin_scope(
         )
         assert response.status_code == 403
         error_data = response.json()
-        assert error_data["detail"]["error"]["code"] == "INSUFFICIENT_SCOPE"
+        assert error_data["error"]["code"] == "INSUFFICIENT_SCOPE"
 
 
 @pytest.mark.asyncio
@@ -307,7 +307,7 @@ async def test_multi_timezone_country_requires_timezone(
         )
         assert response.status_code == 400
         error_data = response.json()
-        assert error_data["detail"]["error"]["code"] == "INVALID_TIMEZONE"
+        assert error_data["error"]["code"] == "INVALID_TIMEZONE"
 
 
 @pytest.mark.asyncio
@@ -338,4 +338,4 @@ async def test_update_profile_own_user_only(
         )
         assert response.status_code == 403
         error_data = response.json()
-        assert error_data["detail"]["error"]["code"] == "INSUFFICIENT_SCOPE"
+        assert error_data["error"]["code"] == "INSUFFICIENT_SCOPE"
