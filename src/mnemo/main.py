@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from mnemo.api.v1.router import router as v1_router
 from mnemo.core.config import get_settings
@@ -87,23 +88,28 @@ async def enforce_https_in_production(request: Request, call_next: CallNext) -> 
     return await call_next(request)
 
 
-@app.middleware("http")
-async def add_request_id(request: Request, call_next: CallNext) -> Response:
+class RequestIDMiddleware(BaseHTTPMiddleware):
     """
     Attach a unique request_id to every request.
     Included in all error responses per NFR-05.2.
     """
-    request_id = f"req_{uuid.uuid4().hex[:8]}"
-    request.state.request_id = request_id
-    response = await call_next(request)
-    response.headers["X-Request-ID"] = request_id
-    return response
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        request_id = f"req_{uuid.uuid4().hex[:8]}"
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
 
 
-# Register size limit and rate limit middleware after request-id middleware so
-# error responses produced by those middlewares can include the request id.
+# Register middlewares in reverse order of execution.
+# add_middleware() inserts at the beginning, so the last one added runs first.
+# Order of execution: RequestID → RateLimit → InputSizeLimit → app
 app.add_middleware(InputSizeLimitMiddleware)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(RequestIDMiddleware)
 
 
 @app.exception_handler(Exception)
@@ -144,8 +150,6 @@ async def http_exception_handler(request: Request, exc: FastAPIHTTPException) ->
         error = {"message": str(detail)}
 
     # Ensure request_id present in response body
-    if not isinstance(error, dict):
-        error = {"message": str(error)}
     error.setdefault("request_id", request_id)
 
     return JSONResponse(

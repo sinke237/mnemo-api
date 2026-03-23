@@ -13,6 +13,17 @@ from mnemo.main import app
 from mnemo.models import User
 
 
+def create_mock_redis() -> AsyncMock:
+    """Create a mock Redis client with common method returns configured."""
+    mock_redis = AsyncMock()
+    mock_redis.ping.return_value = True
+    mock_redis.incr.return_value = 1
+    mock_redis.expire.return_value = True
+    mock_redis.rpush.return_value = 1
+    mock_redis.blpop.return_value = None
+    return mock_redis
+
+
 @pytest.fixture(scope="function", autouse=True)
 async def create_test_database():
     """Drop and recreate all tables before each test."""
@@ -60,10 +71,7 @@ def authenticated_user() -> User:
 async def client(
     db: AsyncSession, monkeypatch: pytest.MonkeyPatch, authenticated_user: User
 ) -> AsyncClient:
-    mock_redis_client = AsyncMock()
-    mock_redis_client.ping.return_value = True
-    mock_redis_client.rpush.return_value = 1
-    mock_redis_client.blpop.return_value = None
+    mock_redis_client = create_mock_redis()
 
     monkeypatch.setattr("mnemo.db.redis.get_redis", lambda: mock_redis_client)
     monkeypatch.setattr("mnemo.services.import_job.get_redis", lambda: mock_redis_client)
@@ -80,10 +88,17 @@ async def client(
 
 
 @pytest.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[AsyncSession, None]:
     """Provide a per-test AsyncSession using AsyncSessionLocal with a
     transaction started and rolled back afterwards to isolate test data.
     """
+    # Mock Redis to prevent rate limit accumulation across tests
+    mock_redis_client = create_mock_redis()
+
+    monkeypatch.setattr("mnemo.db.redis.get_redis", lambda: mock_redis_client)
+    monkeypatch.setattr("mnemo.middleware.rate_limit.get_redis", lambda: mock_redis_client)
+    monkeypatch.setattr("mnemo.services.import_job.get_redis", lambda: mock_redis_client)
+
     # Use a top-level DB connection + outer transaction, then create a
     # nested transaction (SAVEPOINT) for the test. This allows tests to
     # call `await db_session.commit()` without making permanent changes

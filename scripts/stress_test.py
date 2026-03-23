@@ -40,7 +40,7 @@ async def run(url, concurrency):
         tasks = [asyncio.create_task(worker(session, url, sem, results)) for _ in range(concurrency)]
         await asyncio.gather(*tasks)
 
-    successes = sum(1 for s, _ in results if s and 200 <= s < 300)
+    successes = sum(1 for s, _ in results if isinstance(s, int) and 200 <= s < 300)
     failures = len(results) - successes
     avg = sum(t for _, t in results) / len(results) if results else 0
     print(f"Requests: {len(results)}, Successes: {successes}, Failures: {failures}, Avg time: {avg:.3f}s")

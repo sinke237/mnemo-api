@@ -20,7 +20,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mnemo.core.constants import PermissionScope
+from mnemo.core.constants import ErrorCode, PermissionScope
 from mnemo.main import app
 from mnemo.models.user import User
 from mnemo.schemas.user import UserCreate
@@ -261,7 +261,7 @@ async def test_generate_plan_unknown_deck_returns_404(
         headers=headers,
     )
     assert resp.status_code == 404
-    assert resp.json()["error"]["code"] == "DECK_NOT_FOUND"
+    assert resp.json()["error"]["code"] == ErrorCode.DECK_NOT_FOUND.value
 
 
 @pytest.mark.asyncio
@@ -279,7 +279,7 @@ async def test_get_plan_before_any_generated_returns_404(
 
     resp = await plan_client.get(f"/v1/users/{user.id}/plan", headers=headers)
     assert resp.status_code == 404
-    assert resp.json()["error"]["code"] == "PLAN_NOT_FOUND"
+    assert resp.json()["error"]["code"] == ErrorCode.PLAN_NOT_FOUND.value
 
 
 @pytest.mark.asyncio
@@ -309,7 +309,7 @@ async def test_generate_plan_wrong_user_returns_403(
         headers=headers_a,
     )
     assert resp.status_code == 403
-    assert resp.json()["error"]["code"] == "INSUFFICIENT_SCOPE"
+    assert resp.json()["error"]["code"] == ErrorCode.INSUFFICIENT_SCOPE.value
 
 
 @pytest.mark.asyncio
@@ -334,7 +334,7 @@ async def test_get_plan_wrong_user_returns_403(
 
     resp = await plan_client.get(f"/v1/users/{user_b.id}/plan", headers=headers_a)
     assert resp.status_code == 403
-    assert resp.json()["error"]["code"] == "INSUFFICIENT_SCOPE"
+    assert resp.json()["error"]["code"] == ErrorCode.INSUFFICIENT_SCOPE.value
 
 
 @pytest.mark.asyncio

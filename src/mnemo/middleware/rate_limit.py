@@ -1,4 +1,5 @@
 # pragma: no cover
+import hashlib
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -16,7 +17,7 @@ from mnemo.db.redis import get_redis
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Simple Redis-backed rate limiter.
 
-    - Per-API-key when `X-API-Key` header present
+    - Per-API-key when `X-API-Key` header present (hashed to avoid storing raw secrets)
     - Fallback to client IP when no API key
     - Category detection based on path/method
     - Emits `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` on every response
@@ -29,6 +30,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Redis client will be fetched per-request to avoid using a stale
         # connection/pool stored on the middleware instance.
 
+    def _hash_api_key(self, api_key: str) -> str:
+        """
+        Hash the API key to avoid storing raw secrets in Redis.
+        Uses the API key secret as salt for consistent hashing.
+        """
+        salt = self.settings.api_key_secret.encode("utf-8")
+        key_bytes = api_key.encode("utf-8")
+        return hashlib.sha256(salt + key_bytes).hexdigest()
+
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
@@ -36,7 +46,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         api_key = request.headers.get("x-api-key")
         if api_key:
-            identifier = f"api:{api_key}"
+            hashed_key = self._hash_api_key(api_key)
+            identifier = f"api:{hashed_key}"
         else:
             client_host = getattr(request.client, "host", "unknown")
             identifier = f"ip:{client_host}"
@@ -94,14 +105,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def _resolve_category_and_limit(self, path: str, method: str) -> tuple[str, int, int]:
         s = self.settings
-        if path.startswith("/v1/import"):
+        if path == "/v1/import" or path.startswith("/v1/import/"):
             return ("import", s.rate_limit_import_per_hour, 3600)
-        if path.startswith("/v1/auth"):
+        if path == "/v1/auth" or path.startswith("/v1/auth/"):
             return ("auth", s.rate_limit_auth_per_minute, 60)
         # Session endpoints include both read (GET) and answer (POST/PUT) actions.
         # Only apply the `answer` rate limit for non-GET methods so that read-only
         # GET requests fall through to the generic read rate limit.
-        if path.startswith("/v1/sessions") and method.upper() != "GET":
+        if (path == "/v1/sessions" or path.startswith("/v1/sessions/")) and method.upper() != "GET":
             return ("session", s.rate_limit_answer_per_minute, 60)
         if method.upper() == "GET":
             return ("read", s.rate_limit_read_per_minute, 60)

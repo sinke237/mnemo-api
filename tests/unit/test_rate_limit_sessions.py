@@ -7,6 +7,23 @@ from httpx import ASGITransport, AsyncClient
 from tests.helpers.fake_redis import FakeRedis
 
 
+@pytest.fixture(autouse=True)
+def reset_settings_after_test():
+    """Reset Redis client and settings cache after each test.
+
+    Tests that need a fresh app instance should reload mnemo.main themselves.
+    """
+    yield
+    # Reset Redis client
+    import mnemo.db.redis as redis_mod
+
+    redis_mod._redis_client = None
+    # Clear settings cache
+    from mnemo.core.config import get_settings
+
+    get_settings.cache_clear()
+
+
 @pytest.mark.asyncio
 async def test_sessions_get_uses_read_limit(monkeypatch):
     fake = FakeRedis()
@@ -21,7 +38,8 @@ async def test_sessions_get_uses_read_limit(monkeypatch):
     get_settings.cache_clear()
     settings = get_settings()
     settings.rate_limit_read_per_minute = 1
-    # Ensure middleware is re-instantiated with new settings
+    # Reload required here to re-instantiate middleware with modified settings.
+    # This is distinct from the fixture's post-test reload which resets to defaults.
     if "mnemo.main" in sys.modules:
         importlib.reload(sys.modules["mnemo.main"])
 
@@ -36,8 +54,8 @@ async def test_sessions_get_uses_read_limit(monkeypatch):
     assert r1.status_code != 429
     # Second request should be rate-limited
     assert r2.status_code == 429
-    assert "X-RateLimit-Limit" in (r1.headers or {})
-    assert "X-RateLimit-Remaining" in (r1.headers or {})
+    assert "X-RateLimit-Limit" in r1.headers
+    assert "X-RateLimit-Remaining" in r1.headers
 
 
 @pytest.mark.asyncio
@@ -55,7 +73,8 @@ async def test_sessions_post_uses_answer_limit(monkeypatch):
     settings = get_settings()
     settings.rate_limit_answer_per_minute = 1
     settings.rate_limit_read_per_minute = 1000
-    # Ensure middleware is re-instantiated with new settings
+    # Reload required here to re-instantiate middleware with modified settings.
+    # This is distinct from the fixture's post-test reload which resets to defaults.
     if "mnemo.main" in sys.modules:
         importlib.reload(sys.modules["mnemo.main"])
 
@@ -69,5 +88,5 @@ async def test_sessions_post_uses_answer_limit(monkeypatch):
 
     assert r1.status_code != 429
     assert r2.status_code == 429
-    assert "X-RateLimit-Limit" in (r1.headers or {})
-    assert "X-RateLimit-Remaining" in (r1.headers or {})
+    assert "X-RateLimit-Limit" in r1.headers
+    assert "X-RateLimit-Remaining" in r1.headers
