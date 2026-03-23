@@ -1,9 +1,9 @@
-# pragma: no cover
 import hashlib
 import time
 import uuid
 from collections.abc import Awaitable, Callable
 
+import structlog
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -12,6 +12,8 @@ from starlette.types import ASGIApp
 from mnemo.core.config import get_settings
 from mnemo.core.constants import ErrorCode
 from mnemo.db.redis import get_redis
+
+logger = structlog.get_logger()
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -66,11 +68,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         try:
             redis = get_redis()
-            current = await redis.incr(key)
-            if current == 1:
-                await redis.expire(key, ttl)
-        except Exception:
+            # Perform increment + TTL assignment atomically using a small EVAL script.
+            # Script: INCR key; if value == 1 then EXPIRE key ttl end; return value
+            lua = (
+                "local v = redis.call('INCR', KEYS[1]) "
+                "if v == 1 then redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1])) end "
+                "return v"
+            )
+            try:
+                # redis.asyncio.Redis.eval(script, numkeys, *keys_and_args)
+                current = await redis.eval(lua, 1, key, ttl)
+            except Exception:
+                # Fallback for clients that don't support eval in the same way
+                current = await redis.incr(key)
+                if current == 1:
+                    await redis.expire(key, ttl)
+        except Exception as e:
             # Fail-open: if Redis is unavailable, allow traffic but omit rate info
+            logger.warning("redis rate limit check failed, failing open", error=str(e))
             response = await call_next(request)
             return response
 

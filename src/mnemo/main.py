@@ -118,7 +118,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     request_id = getattr(request.state, "request_id", None)
     if request_id is None:
         request_id = f"req_{uuid.uuid4().hex[:8]}"
-    logger.error("unhandled_exception", error=str(exc), request_id=request_id)
+    logger.exception("unhandled_exception", error=str(exc), request_id=request_id)
     return JSONResponse(
         status_code=500,
         content={

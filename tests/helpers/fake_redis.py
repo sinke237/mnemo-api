@@ -11,6 +11,12 @@ class FakeRedis:
         # no-op for tests
         return True
 
+    async def eval(self, script, numkeys, *keys_and_args):
+        # Emulate the atomic INCR+EXPIRE Lua script used by RateLimitMiddleware.
+        # keys_and_args[0] is the key, keys_and_args[1] is the ttl (ignored here).
+        key = keys_and_args[0]
+        return await self.incr(key)
+
     async def ping(self):
         return True
 

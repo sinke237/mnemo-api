@@ -18,6 +18,7 @@ def create_mock_redis() -> AsyncMock:
     mock_redis = AsyncMock()
     mock_redis.ping.return_value = True
     mock_redis.incr.return_value = 1
+    mock_redis.eval.return_value = 1
     mock_redis.expire.return_value = True
     mock_redis.rpush.return_value = 1
     mock_redis.blpop.return_value = None
@@ -74,6 +75,7 @@ async def client(
     mock_redis_client = create_mock_redis()
 
     monkeypatch.setattr("mnemo.db.redis.get_redis", lambda: mock_redis_client)
+    monkeypatch.setattr("mnemo.middleware.rate_limit.get_redis", lambda: mock_redis_client)
     monkeypatch.setattr("mnemo.services.import_job.get_redis", lambda: mock_redis_client)
 
     app.dependency_overrides[get_current_user_from_token] = lambda: authenticated_user
