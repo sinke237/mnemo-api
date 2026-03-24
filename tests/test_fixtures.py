@@ -1,6 +1,5 @@
 import logging
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -11,6 +10,18 @@ from mnemo.core.constants import PermissionScope
 from mnemo.db.database import Base, engine, get_db
 from mnemo.main import app
 from mnemo.models import User
+
+
+def create_mock_redis():
+    """Return a stateful fake Redis client for tests.
+
+    Uses the simple in-memory `FakeRedis` so tests observe counter
+    growth, `rpush`/`blpop` queue behavior, and realistic `incr`/`eval` results.
+    """
+    # Import here to avoid import-time test package resolution issues
+    from tests.helpers.fake_redis import FakeRedis
+
+    return FakeRedis()
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -60,12 +71,10 @@ def authenticated_user() -> User:
 async def client(
     db: AsyncSession, monkeypatch: pytest.MonkeyPatch, authenticated_user: User
 ) -> AsyncClient:
-    mock_redis_client = AsyncMock()
-    mock_redis_client.ping.return_value = True
-    mock_redis_client.rpush.return_value = 1
-    mock_redis_client.blpop.return_value = None
+    mock_redis_client = create_mock_redis()
 
     monkeypatch.setattr("mnemo.db.redis.get_redis", lambda: mock_redis_client)
+    monkeypatch.setattr("mnemo.middleware.rate_limit.get_redis", lambda: mock_redis_client)
     monkeypatch.setattr("mnemo.services.import_job.get_redis", lambda: mock_redis_client)
 
     app.dependency_overrides[get_current_user_from_token] = lambda: authenticated_user
@@ -80,10 +89,17 @@ async def client(
 
 
 @pytest.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[AsyncSession, None]:
     """Provide a per-test AsyncSession using AsyncSessionLocal with a
     transaction started and rolled back afterwards to isolate test data.
     """
+    # Mock Redis to prevent rate limit accumulation across tests
+    mock_redis_client = create_mock_redis()
+
+    monkeypatch.setattr("mnemo.db.redis.get_redis", lambda: mock_redis_client)
+    monkeypatch.setattr("mnemo.middleware.rate_limit.get_redis", lambda: mock_redis_client)
+    monkeypatch.setattr("mnemo.services.import_job.get_redis", lambda: mock_redis_client)
+
     # Use a top-level DB connection + outer transaction, then create a
     # nested transaction (SAVEPOINT) for the test. This allows tests to
     # call `await db_session.commit()` without making permanent changes

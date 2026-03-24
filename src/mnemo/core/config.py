@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     rate_limit_import_per_hour: int = Field(default=10)
     rate_limit_auth_per_minute: int = Field(default=30)
 
+    # Maximum request body size (bytes) for general JSON/form payloads.
+    # Large file uploads (CSV) are handled by specific endpoints.
+    max_request_body_bytes: int = Field(default=1 * 1024 * 1024, gt=0)
+
     # ── Import ─────────────────────────────────────────────────────────────────
     csv_max_size_bytes: int = Field(default=5 * 1024 * 1024)  # 5 MB
 

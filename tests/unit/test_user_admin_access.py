@@ -104,8 +104,8 @@ async def test_non_admin_cannot_access_other_user(monkeypatch):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             resp = await ac.get(f"/v1/users/{target.id}")
 
-        assert resp.status_code == 403
-        assert resp.json()["detail"]["error"]["code"] == "INSUFFICIENT_SCOPE"
+            assert resp.status_code == 403
+            assert resp.json()["error"]["code"] == "INSUFFICIENT_SCOPE"
     finally:
         app.dependency_overrides.clear()
 
