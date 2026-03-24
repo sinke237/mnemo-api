@@ -104,7 +104,7 @@ async def get_deck_progress(
             },
         )
 
-    data = await progress_service.get_deck_progress(db, target_user, deck_id)
+    data = await progress_service.get_deck_progress(db, target_user, deck_id, deck=deck)
     return DeckProgressResponse.model_validate(data)
 
 

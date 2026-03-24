@@ -308,15 +308,39 @@ async def get_user_progress(db: AsyncSession, user: User) -> dict[str, Any]:
     }
 
 
-async def get_deck_progress(db: AsyncSession, user: User, deck_id: str) -> dict[str, Any]:
-    """Get per-deck mastery breakdown for a user, per spec section 09."""
+async def get_deck_progress(
+    db: AsyncSession, user: User, deck_id: str | None = None, deck: Deck | None = None
+) -> dict[str, Any]:
+    """Get per-deck mastery breakdown for a user, per spec section 09.
+
+    Accepts either a `deck_id` (string) or an already-loaded `deck` object. When a
+    `deck` is provided it will be used instead of performing an additional DB
+    lookup, avoiding duplicate reads. If both are provided, `deck` is preferred
+    and its `id` will be used as the deck identifier.
+    """
     cutoff = _end_of_today_utc(user.timezone)
 
-    # Fetch the deck name
-    deck_result = await db.execute(select(Deck).where(Deck.id == deck_id))
-    deck = deck_result.scalar_one_or_none()
-    deck_name = deck.name if deck else deck_id
-    total_cards_in_deck = deck.card_count if deck else 0
+    # Prefer the provided deck object to avoid an extra DB read; when a deck
+    # object is provided its id, name and card_count are used. Only when
+    # `deck` is None do we fall back to using the explicit `deck_id` value and
+    # possibly loading the Deck from the database.
+    if deck is not None:
+        deck_id = deck.id
+        deck_name = deck.name
+        total_cards_in_deck = deck.card_count or 0
+    else:
+        # Fail fast when caller didn't provide either an id or a deck object.
+        if deck_id is None:
+            raise ValueError("get_deck_progress requires either `deck_id` or `deck`")
+
+        # Scope the lookup to the requesting/target user to avoid exposing
+        # another user's deck metadata.
+        deck_result = await db.execute(
+            select(Deck).where(Deck.id == deck_id, Deck.user_id == user.id)
+        )
+        deck = deck_result.scalar_one_or_none()
+        deck_name = deck.name if deck else deck_id
+        total_cards_in_deck = deck.card_count if deck else 0
 
     total_answered, correct_answers, last_studied_dt = await _fetch_progress_aggregates(
         db, user, deck_id=deck_id

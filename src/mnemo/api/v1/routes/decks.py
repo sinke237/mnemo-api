@@ -27,9 +27,11 @@ from mnemo.schemas.deck import (
 )
 from mnemo.schemas.error import ErrorResponse
 from mnemo.schemas.flashcard import FlashcardListResponse, FlashcardResponse
+from mnemo.schemas.progress import DeckProgressResponse
 from mnemo.services import deck as deck_service
 from mnemo.services import flashcard as flashcard_service
 from mnemo.services import idempotency as idempotency_service
+from mnemo.services import progress as progress_service
 
 _log = logging.getLogger(__name__)
 
@@ -256,6 +258,31 @@ async def delete_deck(
             getattr(exc, "resource_name", None) or None,
         )
     return Response(status_code=200)
+
+
+@router.get(
+    "/{deck_id}/stats",
+    response_model=DeckProgressResponse,
+    dependencies=[Depends(require_user_scope(PermissionScope.PROGRESS_READ))],
+    responses={
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+    },
+    summary="Get deck stats",
+)
+async def get_deck_stats(
+    deck_id: str,
+    current_user: User = _current_user_dep,
+    db: AsyncSession = _db_dep,
+) -> DeckProgressResponse | JSONResponse:
+    # Check if deck exists
+    deck = await deck_service.get_deck_by_id(db, current_user.id, deck_id)
+    if deck is None:
+        return _deck_not_found(deck_id)
+
+    data = await progress_service.get_deck_progress(db, current_user, deck_id, deck=deck)
+    return DeckProgressResponse.model_validate(data)
 
 
 @router.get(
