@@ -329,14 +329,18 @@ async def get_deck_progress(
         deck_name = deck.name
         total_cards_in_deck = deck.card_count or 0
     else:
+        # Fail fast when caller didn't provide either an id or a deck object.
         if deck_id is None:
-            deck_name = None
-            total_cards_in_deck = 0
-        else:
-            deck_result = await db.execute(select(Deck).where(Deck.id == deck_id))
-            deck = deck_result.scalar_one_or_none()
-            deck_name = deck.name if deck else deck_id
-            total_cards_in_deck = deck.card_count if deck else 0
+            raise ValueError("get_deck_progress requires either `deck_id` or `deck`")
+
+        # Scope the lookup to the requesting/target user to avoid exposing
+        # another user's deck metadata.
+        deck_result = await db.execute(
+            select(Deck).where(Deck.id == deck_id, Deck.user_id == user.id)
+        )
+        deck = deck_result.scalar_one_or_none()
+        deck_name = deck.name if deck else deck_id
+        total_cards_in_deck = deck.card_count if deck else 0
 
     total_answered, correct_answers, last_studied_dt = await _fetch_progress_aggregates(
         db, user, deck_id=deck_id
