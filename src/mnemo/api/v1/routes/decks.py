@@ -281,7 +281,7 @@ async def get_deck_stats(
     if deck is None:
         return _deck_not_found(deck_id)
 
-    data = await progress_service.get_deck_progress(db, current_user, deck_id)
+    data = await progress_service.get_deck_progress(db, current_user, deck_id, deck=deck)
     return DeckProgressResponse.model_validate(data)
 
 

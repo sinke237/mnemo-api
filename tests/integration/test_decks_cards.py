@@ -236,6 +236,20 @@ async def test_get_deck_stats(client: AsyncClient, user_token: tuple[User, str])
     assert (
         stats["due_count"] == 0
     )  # Cards just created are not due yet in the system, or need a session to become due
+    # Additional DeckProgressResponse fields
+    assert "mastery_pct" in stats
+    assert isinstance(stats["mastery_pct"], float)
+    assert stats["mastery_pct"] == 0.0
+    assert "accuracy_rate" in stats
+    assert isinstance(stats["accuracy_rate"], float)
+    assert stats["accuracy_rate"] == 0.0
+    assert "total_sessions" in stats
+    assert isinstance(stats["total_sessions"], int)
+    assert stats["total_sessions"] == 0
+    assert "last_studied_at" in stats
+    assert stats["last_studied_at"] is None
+    assert "last_studied_at_local" in stats
+    assert stats["last_studied_at_local"] is None
 
 
 @pytest.mark.asyncio
