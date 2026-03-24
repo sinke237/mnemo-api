@@ -206,6 +206,39 @@ async def test_put_flashcard_defaults_and_clear_source_ref(
 
 
 @pytest.mark.asyncio
+async def test_get_deck_stats(client: AsyncClient, user_token: tuple[User, str]) -> None:
+    _, token = user_token
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_deck = await client.post(
+        "/v1/decks",
+        json={"name": "Stats Deck", "description": "Deck for stats test"},
+        headers=headers,
+    )
+    assert create_deck.status_code == 201
+    deck_id = create_deck.json()["id"]
+
+    for idx in range(3):
+        response = await client.post(
+            f"/v1/decks/{deck_id}/cards",
+            json={"question": f"Q{idx}", "answer": f"A{idx}"},
+            headers=headers,
+        )
+        assert response.status_code == 201
+
+    stats_resp = await client.get(f"/v1/decks/{deck_id}/stats", headers=headers)
+    assert stats_resp.status_code == 200
+    stats = stats_resp.json()
+    assert stats["deck_id"] == deck_id
+    assert stats["name"] == "Stats Deck"
+    assert stats["total_cards"] == 3
+    assert stats["mastered_cards"] == 0
+    assert (
+        stats["due_count"] == 0
+    )  # Cards just created are not due yet in the system, or need a session to become due
+
+
+@pytest.mark.asyncio
 async def test_idempotency_key_replay(client: AsyncClient, user_token: tuple[User, str]) -> None:
     _, token = user_token
     headers = {"Authorization": f"Bearer {token}", "Idempotency-Key": "idem-test-key"}
