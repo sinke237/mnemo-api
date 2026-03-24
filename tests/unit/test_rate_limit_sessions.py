@@ -1,4 +1,5 @@
 import importlib
+import logging
 import sys
 
 import pytest
@@ -11,7 +12,8 @@ from tests.helpers.fake_redis import FakeRedis
 def reset_settings_after_test():
     """Reset Redis client and settings cache after each test.
 
-    Tests that need a fresh app instance should reload mnemo.main themselves.
+    Reset `redis_mod._redis_client` and `get_settings.cache_clear()` then
+    reload `mnemo.main` so the app is reinitialized for subsequent tests.
     """
     yield
     # Reset Redis client
@@ -22,6 +24,16 @@ def reset_settings_after_test():
     from mnemo.core.config import get_settings
 
     get_settings.cache_clear()
+    # Reload mnemo.main to re-initialize the app/module state
+    import importlib
+
+    try:
+        import mnemo.main as mnemo_main
+
+        importlib.reload(mnemo_main)
+    except Exception as e:
+        # Best-effort reload; log the failure so test failures aren't silently ignored.
+        logging.exception("Failed to reload mnemo.main during fixture teardown: %s", e)
 
 
 @pytest.mark.asyncio
@@ -50,7 +62,7 @@ async def test_sessions_get_uses_read_limit(monkeypatch):
         r1 = await ac.get("/v1/sessions/nonexistent", headers=headers)
         r2 = await ac.get("/v1/sessions/nonexistent", headers=headers)
 
-    # First request should not be a 429
+    # First request should not be a 429 (endpoint may return 401/404 in unit tests)
     assert r1.status_code != 429
     # Second request should be rate-limited
     assert r2.status_code == 429

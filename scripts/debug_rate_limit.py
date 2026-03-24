@@ -22,4 +22,5 @@ async def main():
         print('r3', r3.status_code, r3.headers)
         print('r3 body', r3.text)
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

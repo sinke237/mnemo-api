@@ -1,9 +1,10 @@
 """Simple stress tester using asyncio + aiohttp.
 
 Usage:
-    python scripts/stress_test.py --url http://localhost:8000/v1/health --concurrency 500
+    python scripts/stress_test.py --url http://localhost:8000/v1/health --concurrency 500 --requests 1000
 
-This will fire `concurrency` concurrent GET requests and report basic timing.
+This will fire `requests` total GET requests with up to `concurrency` in-flight
+requests at once and report basic timing.
 """
 import argparse
 import asyncio
@@ -11,6 +12,11 @@ import time
 
 import aiohttp
 import logging
+
+# Configure basic logging so `logger.exception(...)` emits to stderr when
+# this script is run. Use INFO level by default; exceptions will still be
+# logged at ERROR with traceback.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 
 logger = logging.getLogger(__name__)
@@ -33,11 +39,16 @@ async def worker(session, url, sem, results):
             results.append((err_str, elapsed))
 
 
-async def run(url, concurrency):
+async def run(url, concurrency, total_requests):
+    """Run `total_requests` workers, allowing up to `concurrency` in-flight.
+
+    The semaphore limits concurrency while we schedule `total_requests` tasks
+    so the limiter is effective.
+    """
     sem = asyncio.Semaphore(concurrency)
     results = []
     async with aiohttp.ClientSession() as session:
-        tasks = [asyncio.create_task(worker(session, url, sem, results)) for _ in range(concurrency)]
+        tasks = [asyncio.create_task(worker(session, url, sem, results)) for _ in range(total_requests)]
         await asyncio.gather(*tasks)
 
     successes = sum(1 for s, _ in results if isinstance(s, int) and 200 <= s < 300)
@@ -50,8 +61,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://localhost:8000/v1/health")
     parser.add_argument("--concurrency", type=int, default=500)
+    parser.add_argument("--requests", type=int, default=500)
     args = parser.parse_args()
-    asyncio.run(run(args.url, args.concurrency))
+    asyncio.run(run(args.url, args.concurrency, args.requests))
 
 
 if __name__ == "__main__":

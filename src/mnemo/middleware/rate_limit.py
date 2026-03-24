@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -35,11 +36,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def _hash_api_key(self, api_key: str) -> str:
         """
         Hash the API key to avoid storing raw secrets in Redis.
-        Uses the API key secret as salt for consistent hashing.
+        Uses HMAC with the API key secret for cryptographically standard hashing.
         """
-        salt = self.settings.api_key_secret.encode("utf-8")
-        key_bytes = api_key.encode("utf-8")
-        return hashlib.sha256(salt + key_bytes).hexdigest()
+        return hmac.new(
+            self.settings.api_key_secret.encode("utf-8"),
+            api_key.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
 
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
