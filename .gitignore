@@ -34,6 +34,8 @@ htmlcov/
 # PyInstaller
 *.manifest
 *.spec
+# But do track the Flutter Windows app manifest (must not be excluded)
+!apiapp/windows/**/*.manifest
 
 # Environments
 .venv/
