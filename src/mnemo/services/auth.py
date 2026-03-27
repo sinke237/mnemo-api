@@ -202,7 +202,7 @@ async def authenticate_user(
     return user
 
 
-def scopes_for_role(role: str) -> list[str]:
+def scopes_for_role(role: str, admin_access_granted: bool) -> list[str]:
     """
     Return JWT token scopes appropriate for the given user role.
 
@@ -214,6 +214,6 @@ def scopes_for_role(role: str) -> list[str]:
     """
     from mnemo.core.constants import ADMIN_API_KEY_SCOPES, DEFAULT_API_KEY_SCOPES  # noqa: PLC0415
 
-    if role == "admin":
+    if role == "admin" and admin_access_granted:
         return [s.value for s in ADMIN_API_KEY_SCOPES]
     return [s.value for s in DEFAULT_API_KEY_SCOPES]

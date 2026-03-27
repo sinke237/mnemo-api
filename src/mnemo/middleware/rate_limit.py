@@ -128,7 +128,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if path == "/v1/auth" or path.startswith("/v1/auth/"):
             return ("auth", s.rate_limit_auth_per_minute, 60)
         # Self-registration and admin provisioning share the stricter auth limit
-        if path == "/v1/user/provision" or path == "/v1/admin/provision":
+        if (
+            path == "/v1/user/provision"
+            or path.startswith("/v1/user/provision/")
+            or path == "/v1/admin/provision"
+            or path.startswith("/v1/admin/provision/")
+        ):
             return ("auth", s.rate_limit_auth_per_minute, 60)
         # Session endpoints include both read (GET) and answer (POST/PUT) actions.
         # Only apply the `answer` rate limit for non-GET methods so that read-only

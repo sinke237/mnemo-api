@@ -9,7 +9,7 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -99,7 +99,7 @@ def test_schedule_dates_are_consecutive_local_dates() -> None:
         deck_name="Biology",
     )
     for i, entry in enumerate(schedule):
-        expected = (start + __import__("datetime").timedelta(days=i)).isoformat()
+        expected = (start + timedelta(days=i)).isoformat()
         assert entry["date"] == expected
 
 

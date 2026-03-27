@@ -143,7 +143,7 @@ async def login(
             },
         )
 
-    scopes = auth_service.scopes_for_role(user.role)
+    scopes = auth_service.scopes_for_role(user.role, user.admin_access_granted)
     access_token = auth_service.create_access_token(user_id=user.id, scopes=scopes)
 
     return TokenResponse(

@@ -23,6 +23,9 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     display_name: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True)
+    normalized_display_name: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, unique=True
+    )
     country: Mapped[str] = mapped_column(String(2), nullable=False, index=True)
     locale: Mapped[str | None] = mapped_column(String(10), nullable=True)
     timezone: Mapped[str] = mapped_column(String(50), nullable=False, index=True)

@@ -34,6 +34,7 @@ class UserProvisionRequest(BaseModel):
     password: str | None = Field(
         None,
         min_length=8,
+        max_length=72,
         description="Password (min 8 chars). If omitted the account is passwordless; "
         "login requires an API key.",
     )

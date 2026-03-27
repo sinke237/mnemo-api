@@ -12,6 +12,7 @@ because SQL UNIQUE constraints treat NULLs as distinct.
 from collections.abc import Sequence
 
 from alembic import op
+from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision: str = "a2b3c4d5e6f7"
@@ -21,10 +22,33 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Create a unique constraint on display_name.
-    # NULLs do not violate UNIQUE in PostgreSQL or SQLite.
-    op.create_unique_constraint("uq_users_display_name", "users", ["display_name"])
+    # Data precheck: ensure there are no duplicate non-NULL display_name values.
+    conn = op.get_bind()
+    duplicate = conn.execute(
+        text(
+            """
+            SELECT display_name
+            FROM users
+            WHERE display_name IS NOT NULL
+            GROUP BY display_name
+            HAVING COUNT(*) > 1
+            LIMIT 1
+            """
+        )
+    ).fetchone()
+    if duplicate:
+        raise Exception(
+            "Cannot add unique constraint 'uq_users_display_name': duplicate display_name '" + str(duplicate[0]) + "' found. "
+            "Resolve or remove duplicates before running this migration."
+        )
+
+    # Use batch_alter_table so the migration works on SQLite when render_as_batch
+    # is not enabled (batch mode performs a safe ALTER by table copy).
+    with op.batch_alter_table("users") as batch_op:
+        batch_op.create_unique_constraint("uq_users_display_name", ["display_name"])
 
 
 def downgrade() -> None:
-    op.drop_constraint("uq_users_display_name", "users", type_="unique")
+    # Drop the unique constraint using batch_alter_table to support SQLite.
+    with op.batch_alter_table("users") as batch_op:
+        batch_op.drop_constraint("uq_users_display_name", type_="unique")

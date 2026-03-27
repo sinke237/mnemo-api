@@ -70,39 +70,15 @@ async def admin_provision_user(
             password=body.password,
             role=role,
         )
-    except DisplayNameConflictError:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": {
-                    "code": ErrorCode.DISPLAY_NAME_CONFLICT.value,
-                    "message": "Display name is already taken",
-                    "status": 409,
-                }
-            },
-        ) from None
-    except InvalidCountryCodeError as e:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "error": {
-                    "code": ErrorCode.INVALID_COUNTRY_CODE.value,
-                    "message": str(e),
-                    "status": 422,
-                }
-            },
-        ) from None
-    except (InvalidTimezoneError, MissingTimezoneError) as e:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "error": {
-                    "code": ErrorCode.INVALID_TIMEZONE.value,
-                    "message": str(e),
-                    "status": 422,
-                }
-            },
-        ) from None
+    except (
+        DisplayNameConflictError,
+        InvalidCountryCodeError,
+        InvalidTimezoneError,
+        MissingTimezoneError,
+    ) as e:
+        from mnemo.api.v1.routes.provision import _raise_provision_http_error
+
+        _raise_provision_http_error(e)
 
     return ProvisionResponse(
         user_id=user.id,

@@ -105,9 +105,14 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
     resolved_timezone = resolve_country_timezone(user_data.country, user_data.timezone)
 
     # Create user record
+    normalized_display_name = (
+        user_data.display_name.strip().lower() if user_data.display_name is not None else None
+    )
+
     user = User(
         id=generate_user_id(),
         display_name=user_data.display_name,
+        normalized_display_name=normalized_display_name,
         country=user_data.country.upper(),
         locale=user_data.locale,
         timezone=resolved_timezone,
@@ -163,6 +168,7 @@ async def update_user(db: AsyncSession, user_id: str, user_data: UserUpdate) -> 
     # Update fields that are provided
     if user_data.display_name is not None:
         user.display_name = user_data.display_name
+        user.normalized_display_name = user_data.display_name.strip().lower()
 
     if user_data.locale is not None:
         user.locale = user_data.locale
@@ -241,14 +247,16 @@ async def user_exists(db: AsyncSession, user_id: str) -> bool:
 
 
 async def get_user_by_display_name(db: AsyncSession, display_name: str) -> User | None:
-    """Retrieve a user by their display_name."""
-    result = await db.execute(select(User).where(User.display_name == display_name))
+    """Retrieve a user by their display_name (normalized match)."""
+    normalized = display_name.strip().lower()
+    result = await db.execute(select(User).where(User.normalized_display_name == normalized))
     return result.scalar_one_or_none()
 
 
 async def display_name_taken(db: AsyncSession, display_name: str) -> bool:
-    """Return True if display_name is already used by another user (case-sensitive)."""
-    result = await db.execute(select(1).where(User.display_name == display_name).limit(1))
+    """Return True if display_name is already used by another user (normalized match)."""
+    normalized = display_name.strip().lower()
+    result = await db.execute(select(1).where(User.normalized_display_name == normalized).limit(1))
     return result.scalar_one_or_none() is not None
 
 
@@ -301,6 +309,9 @@ async def provision_user(
     user = User(
         id=generate_user_id(),
         display_name=display_name,
+        normalized_display_name=(
+            display_name.strip().lower() if display_name is not None else None
+        ),
         country=country,
         timezone=resolved_timezone,
         role=role,
@@ -361,7 +372,13 @@ async def list_users(
     # Base filter
     where_clauses = []
     if search:
-        where_clauses.append(User.display_name.ilike(f"%{search}%"))
+        # Escape backslashes first, then SQL wildcard characters so literal
+        # backslashes, percent signs and underscores in the search string are
+        # treated as literals rather than wildcards.
+        escaped = (
+            search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        )
+        where_clauses.append(User.display_name.ilike(f"%{escaped}%", escape="\\"))
 
     # Total count
     count_stmt = select(func.count(User.id)).select_from(User)
