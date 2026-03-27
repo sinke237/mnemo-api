@@ -144,3 +144,36 @@ jobs:
           # Just verify the container started (DB won't be available in this check)
           docker ps | grep mnemo_ci
           docker stop mnemo_ci || true
+
+  # ── Job 5: Flutter CI ───────────────────────────────────────────────────────
+  flutter-ci:
+    name: Flutter CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apiapp
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze code
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build Android (APK)
+        run: flutter build apk --debug
+
+      - name: Build iOS
+        run: flutter build ios --no-codesign
+
+      - name: Build Web
+        run: flutter build web
