@@ -7,7 +7,7 @@ Per spec section 11: User Profiles and FR-07.1.
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Integer, String
+from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -22,7 +22,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    display_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True)
     country: Mapped[str] = mapped_column(String(2), nullable=False, index=True)
     locale: Mapped[str | None] = mapped_column(String(10), nullable=True)
     timezone: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
@@ -36,6 +36,14 @@ class User(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="user")
+    admin_access_granted: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
+    admin_access_granted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     sessions: Mapped[list["Session"]] = relationship(

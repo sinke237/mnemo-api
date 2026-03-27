@@ -1,4 +1,5 @@
 import types
+from typing import Any
 
 import pytest
 
@@ -7,14 +8,14 @@ from mnemo.core.config import Settings
 
 
 @pytest.mark.asyncio
-async def test_health_check_variants(monkeypatch):
-    async def db_ok():
+async def test_health_check_variants(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def db_ok() -> bool:
         return True
 
-    async def redis_ok():
+    async def redis_ok() -> bool:
         return True
 
-    async def worker_ok():
+    async def worker_ok() -> bool:
         return True
 
     # Patch the functions that `health_check` actually references
@@ -28,7 +29,7 @@ async def test_health_check_variants(monkeypatch):
     assert resp.redis == "ok"
     assert resp.worker == "ok"
 
-    async def db_down():
+    async def db_down() -> bool:
         return False
 
     monkeypatch.setattr("mnemo.api.v1.routes.health.check_db_connection", db_down)
@@ -37,7 +38,7 @@ async def test_health_check_variants(monkeypatch):
     assert resp.db == "unreachable"
 
     # Worker heartbeat down variant: keep db and redis OK, but heartbeat reports down
-    async def worker_down():
+    async def worker_down() -> bool:
         return False
 
     # restore db/redis to OK
@@ -52,7 +53,7 @@ async def test_health_check_variants(monkeypatch):
     assert resp.status != "ok"
 
 
-def test_settings_jwt_validator_and_env_props():
+def test_settings_jwt_validator_and_env_props() -> None:
     # Validates is_production / is_development properties
     s = Settings(
         app_env="production",
@@ -70,17 +71,17 @@ def test_settings_jwt_validator_and_env_props():
 
 
 @pytest.mark.asyncio
-async def test_redis_and_close(monkeypatch):
+async def test_redis_and_close(monkeypatch: pytest.MonkeyPatch) -> None:
     # Provide a fake aioredis client via from_url
     class FakeClient:
-        def __init__(self):
+        def __init__(self) -> None:
             self.ping_called = False
 
-        async def ping(self):
+        async def ping(self) -> bool:
             self.ping_called = True
             return True
 
-        async def aclose(self):
+        async def aclose(self) -> None:
             return None
 
     fake = FakeClient()
@@ -106,38 +107,43 @@ async def test_redis_and_close(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_db_check_success_and_failure(monkeypatch):
+async def test_db_check_success_and_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     # Create a fake engine.connect context manager
     class DummyConn:
-        async def execute(self, stmt):
+        async def execute(self, stmt: Any) -> None:
             return None
 
+    class OKCM:
+        async def __aenter__(self) -> "DummyConn":
+            return DummyConn()
+
+        async def __aexit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: types.TracebackType | None,
+        ) -> bool:
+            return False
+
+    class FailCM:
+        async def __aenter__(self) -> None:
+            raise RuntimeError("connect failed")
+
+        async def __aexit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: types.TracebackType | None,
+        ) -> bool:
+            return False
+
     class DummyEngine:
-        def __init__(self, succeed=True):
+        def __init__(self, succeed: bool = True) -> None:
             self.succeed = succeed
 
-        def connect(self):
-            # Return a simple async context manager object with explicit
-            # `__aenter__` / `__aexit__` implementations to avoid relying
-            # on generator-based context managers in tests.
+        def connect(self) -> "OKCM | FailCM":
             if self.succeed:
-
-                class OKCM:
-                    async def __aenter__(self):
-                        return DummyConn()
-
-                    async def __aexit__(self, exc_type, exc, tb):
-                        return False
-
                 return OKCM()
-
-            class FailCM:
-                async def __aenter__(self):
-                    raise RuntimeError("connect failed")
-
-                async def __aexit__(self, exc_type, exc, tb):
-                    return False
-
             return FailCM()
 
     # Success case
@@ -156,25 +162,25 @@ async def test_db_check_success_and_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_lifespan_runs_and_calls_close(monkeypatch):
+async def test_lifespan_runs_and_calls_close(monkeypatch: pytest.MonkeyPatch) -> None:
     # Patch get_redis to return a fake with ping, and patch close_redis and engine.dispose
     class FakeRedis:
-        async def ping(self):
+        async def ping(self) -> bool:
             return True
 
-        async def aclose(self):
+        async def aclose(self) -> None:
             return None
 
     fake = FakeRedis()
 
     monkeypatch.setattr("mnemo.main.get_redis", lambda: fake)
 
-    async def fake_close():
+    async def fake_close() -> None:
         return None
 
     monkeypatch.setattr("mnemo.main.close_redis", fake_close)
 
-    async def fake_dispose():
+    async def fake_dispose() -> None:
         return None
 
     monkeypatch.setattr("mnemo.main.engine", types.SimpleNamespace(dispose=fake_dispose))

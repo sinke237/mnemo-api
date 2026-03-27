@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mnemo.core.config import get_settings
 from mnemo.core.constants import ErrorCode
 from mnemo.db.database import get_db
-from mnemo.schemas.auth import TokenRequest, TokenResponse
+from mnemo.schemas.auth import LoginRequest, TokenRequest, TokenResponse
 from mnemo.schemas.error import ErrorResponse
 from mnemo.services import api_key as api_key_service
 from mnemo.services import auth as auth_service
@@ -98,6 +98,53 @@ async def get_access_token(
         user_id=request.user_id,
         scopes=scopes,
     )
+
+    return TokenResponse(
+        access_token=access_token,
+        expires_in=settings.jwt_expiry_seconds,
+        token_type="Bearer",  # noqa: S106
+    )
+
+
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid credentials"},
+    },
+    summary="Password login",
+    description=(
+        "Authenticate with display_name + password and receive a short-lived JWT. "
+        "Returns the same shape as POST /v1/auth/token so clients can use either "
+        "interchangeably.  Does NOT distinguish 'user not found' from 'wrong password' "
+        "to prevent user enumeration."
+        "\n\nPasswordless accounts must use POST /v1/auth/token instead."
+    ),
+)
+async def login(
+    request: LoginRequest,
+    db: AsyncSession = db_dep,
+) -> TokenResponse:
+    """
+    Authenticate a user by display_name + password and return a JWT access token.
+
+    Security: always returns 401 'Invalid credentials' on failure — no enumeration.
+    """
+    user = await auth_service.authenticate_user(db, request.display_name, request.password)
+    if user is None:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": {
+                    "code": ErrorCode.INVALID_CREDENTIALS.value,
+                    "message": "Invalid credentials",
+                    "status": 401,
+                }
+            },
+        )
+
+    scopes = auth_service.scopes_for_role(user.role)
+    access_token = auth_service.create_access_token(user_id=user.id, scopes=scopes)
 
     return TokenResponse(
         access_token=access_token,

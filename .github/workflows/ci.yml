@@ -51,7 +51,7 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run mypy
-        run: mypy src/mnemo/ --exclude src/mnemo/db/redis.py
+        run: mypy src/mnemo/
 
   # ── Job 3: Tests ────────────────────────────────────────────────────────────
   test:

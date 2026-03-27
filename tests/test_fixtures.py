@@ -1,5 +1,6 @@
 import logging
 from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -11,8 +12,11 @@ from mnemo.db.database import Base, engine, get_db
 from mnemo.main import app
 from mnemo.models import User
 
+if TYPE_CHECKING:
+    from tests.helpers.fake_redis import FakeRedis
 
-def create_mock_redis():
+
+def create_mock_redis() -> "FakeRedis":
     """Return a stateful fake Redis client for tests.
 
     Uses the simple in-memory `FakeRedis` so tests observe counter

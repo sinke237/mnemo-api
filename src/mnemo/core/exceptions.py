@@ -42,6 +42,12 @@ class TimezoneNotAllowedError(UserError):
     pass
 
 
+class DisplayNameConflictError(UserError):
+    """Raised when a display_name is already taken by another user."""
+
+    pass
+
+
 # ── API Key Exceptions ─────────────────────────────────────────────────────────
 
 
