@@ -23,6 +23,14 @@ profile:
 #    paths:
 #      - <path/where/not/run/inspection>
 
+# Exclude the Flutter app sub-project — it is not a JVM target and its
+# Android local.properties references machine-specific SDK paths that are
+# unavailable in CI.
+exclude:
+  - name: All
+    paths:
+      - apiapp
+
 projectJDK: "21" #(Applied in CI/CD pipeline)
 
 #Execute shell command before Qodana execution (Applied in CI/CD pipeline)
