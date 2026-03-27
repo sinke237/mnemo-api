@@ -9,25 +9,36 @@ class ConfidenceSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: List.generate(3, (i) {
-      final titles = ['Low', 'Medium', 'High'];
-      final bool sel = i == selected;
-      return Expanded(
-        child: GestureDetector(
-          onTap: () => onChanged(i),
-          child: Container(
-            height: 40,
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            decoration: BoxDecoration(
-              color: sel ? (i == 2 ? accentGreen : (i == 1 ? accentAmber : accentRed)).withAlpha(35) : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: sel ? primaryColor : borderColor.withAlpha(153)),
-            ),
-            alignment: Alignment.center,
-            child: Text(titles[i], style: TextStyle(fontWeight: sel ? FontWeight.w700 : FontWeight.w500)),
-          ),
+    return SegmentedButton<int>(
+      segments: const <ButtonSegment<int>>[
+        ButtonSegment<int>(value: 0, label: Text('Low')),
+        ButtonSegment<int>(value: 1, label: Text('Medium')),
+        ButtonSegment<int>(value: 2, label: Text('High')),
+      ],
+      selected: <int>{selected},
+      onSelectionChanged: (Set<int> newSelection) {
+        onChanged(newSelection.first);
+      },
+      style: ButtonStyle(
+        backgroundColor: MaterialStateProperty.resolveWith<Color>(
+          (Set<MaterialState> states) {
+            if (states.contains(MaterialState.selected)) {
+              if (selected == 0) {
+                return accentRed.withAlpha(35);
+              } else if (selected == 1) {
+                return accentAmber.withAlpha(35);
+              } else {
+                return accentGreen.withAlpha(35);
+              }
+            }
+            return Colors.transparent;
+          },
         ),
-      );
-    }));
+        foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
+        side: MaterialStateProperty.all<BorderSide>(
+          BorderSide(color: borderColor.withAlpha(153)),
+        ),
+      ),
+    );
   }
 }

@@ -28,7 +28,12 @@ final ColorScheme _seededDark = ColorScheme.fromSeed(
 ThemeData buildLightTheme() {
   return ThemeData(
     useMaterial3: true,
-    colorScheme: _seededLight.copyWith(surface: surfaceColor),
+    colorScheme: _seededLight.copyWith(
+      surface: surfaceColor,
+      onSurface: Colors.white,
+      background: cardColor,
+      onBackground: Colors.white,
+    ),
     scaffoldBackgroundColor: Colors.white,
     cardColor: cardColor,
     dividerColor: borderColor,

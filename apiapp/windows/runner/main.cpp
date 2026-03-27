@@ -15,7 +15,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
-  ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  HRESULT hr = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  if (FAILED(hr)) {
+    return EXIT_FAILURE;
+  }
 
   flutter::DartProject project(L"data");
 
@@ -28,12 +31,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
   if (!window.Create(L"apiapp", origin, size)) {
+    ::CoUninitialize();
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
 
   ::MSG msg;
-  while (::GetMessage(&msg, nullptr, 0, 0)) {
+  while (::GetMessage(&msg, nullptr, 0, 0) > 0) {
     ::TranslateMessage(&msg);
     ::DispatchMessage(&msg);
   }

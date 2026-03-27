@@ -7,7 +7,8 @@ class TagChip extends StatelessWidget {
   final bool selected;
   final VoidCallback? onRemove;
 
-  const TagChip({super.key, required this.label, this.removable = false, this.selected = false, this.onRemove});
+  const TagChip({super.key, required this.label, this.removable = false, this.selected = false, this.onRemove})
+      : assert(!removable || onRemove != null);
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +22,12 @@ class TagChip extends StatelessWidget {
         Text(label, style: MnemoTypography.tag(context)),
         if (removable) ...[
           const SizedBox(width: 8),
-          GestureDetector(onTap: onRemove, child: const Icon(Icons.close, size: 14)),
+          IconButton(
+            onPressed: onRemove,
+            icon: const Icon(Icons.close, size: 14),
+            constraints: const BoxConstraints(),
+            padding: EdgeInsets.zero,
+          ),
         ]
       ]),
     );

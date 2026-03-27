@@ -100,7 +100,9 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     window_class.hbrBackground = 0;
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = Win32Window::WndProc;
-    RegisterClass(&window_class);
+    if (RegisterClass(&window_class) == 0) {
+      return nullptr;
+    }
     class_registered_ = true;
   }
   return kWindowClassName;
@@ -127,6 +129,10 @@ bool Win32Window::Create(const std::wstring& title,
 
   const wchar_t* window_class =
       WindowClassRegistrar::GetInstance()->GetWindowClass();
+
+  if (window_class == nullptr) {
+    return false;
+  }
 
   const POINT target_point = {static_cast<LONG>(origin.x),
                               static_cast<LONG>(origin.y)};

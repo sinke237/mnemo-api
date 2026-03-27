@@ -56,12 +56,19 @@ jobs:
         run: flutter pub get
         working-directory: ./apiapp
 
-      - name: Analyze code and generate SARIF
-        run: flutter analyze --format=sarif --output=flutter-results.sarif || true
+      - name: Analyze code
+        run: flutter analyze > flutter-analysis.txt
         working-directory: ./apiapp
+        continue-on-error: true
+
+      - name: Convert to SARIF
+        uses: advanced-security/dart-analyzer-sarif@main
+        with:
+          input: apiapp/flutter-analysis.txt
+          output: flutter-results.sarif
 
       - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: ${{ github.workspace }}/apiapp/flutter-results.sarif
+          sarif_file: flutter-results.sarif
           category: flutter-analysis
