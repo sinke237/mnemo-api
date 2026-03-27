@@ -37,3 +37,38 @@ jobs:
           upload-result: false
           # quick-fixes available in Ultimate and Ultimate Plus plans
           push-fixes: 'none'
+
+  flutter_code_scan:
+    name: Flutter Code Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: ./apiapp
+
+      - name: Analyze code
+        run: flutter analyze > flutter-analysis.txt
+        working-directory: ./apiapp
+        continue-on-error: true
+
+      - name: Convert to SARIF
+        uses: advanced-security/dart-analyzer-sarif@main
+        with:
+          input: apiapp/flutter-analysis.txt
+          output: flutter-results.sarif
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: flutter-results.sarif
+          category: flutter-analysis
