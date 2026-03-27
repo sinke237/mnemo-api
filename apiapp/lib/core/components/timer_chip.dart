@@ -1,0 +1,62 @@
+import 'package:flutter/material.dart';
+import '../typography.dart';
+
+enum TimerState { normal, warning, critical }
+
+class TimerChip extends StatefulWidget {
+  final Duration duration;
+  final VoidCallback? onTap;
+
+  const TimerChip({super.key, required this.duration, this.onTap});
+
+  @override
+  State<TimerChip> createState() => _TimerChipState();
+}
+
+class _TimerChipState extends State<TimerChip> {
+  bool expanded = false;
+
+  TimerState get state {
+    final s = widget.duration.inSeconds;
+    if (s <= 30) return TimerState.critical;
+    if (s <= 120) return TimerState.warning;
+    return TimerState.normal;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (state) {
+      TimerState.normal => Colors.grey.shade800,
+      TimerState.warning => Colors.amber.shade700,
+      TimerState.critical => Colors.red.shade400,
+    };
+
+    return GestureDetector(
+      onTap: () {
+        setState(() => expanded = !expanded);
+        widget.onTap?.call();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(_format(widget.duration), style: MnemoTypography.mono(context)),
+          if (expanded) ...[
+            const SizedBox(width: 8),
+            Text('Tap to collapse', style: MnemoTypography.bodySmall(context)),
+          ]
+        ]),
+      ),
+    );
+  }
+
+  String _format(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '${d.inHours > 0 ? '${d.inHours}:' : ''}$m:$s';
+  }
+}
