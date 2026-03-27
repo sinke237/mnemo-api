@@ -14,7 +14,7 @@ class MnemoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor.withOpacity(0.6)),
+        border: Border.all(color: borderColor.withAlpha(153)),
       ),
       child: child,
     );

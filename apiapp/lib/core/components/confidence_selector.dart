@@ -19,9 +19,9 @@ class ConfidenceSelector extends StatelessWidget {
             height: 40,
             margin: const EdgeInsets.symmetric(horizontal: 4),
             decoration: BoxDecoration(
-              color: sel ? (i == 2 ? accentGreen : (i == 1 ? accentAmber : accentRed)).withOpacity(0.14) : Colors.transparent,
+              color: sel ? (i == 2 ? accentGreen : (i == 1 ? accentAmber : accentRed)).withAlpha(35) : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: sel ? primaryColor : borderColor.withOpacity(0.6)),
+              border: Border.all(color: sel ? primaryColor : borderColor.withAlpha(153)),
             ),
             alignment: Alignment.center,
             child: Text(titles[i], style: TextStyle(fontWeight: sel ? FontWeight.w700 : FontWeight.w500)),

@@ -11,7 +11,7 @@ class MasteryBar extends StatelessWidget {
     return Container(
       height: 6,
       decoration: BoxDecoration(
-        color: borderColor.withOpacity(0.2),
+        color: borderColor.withAlpha(51),
         borderRadius: BorderRadius.circular(3),
       ),
       child: FractionallySizedBox(

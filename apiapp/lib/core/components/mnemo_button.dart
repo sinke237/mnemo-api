@@ -36,7 +36,7 @@ class MnemoButton extends StatelessWidget {
         ? SizedBox(
             height: 20,
             width: 140,
-            child: LinearProgressIndicator(backgroundColor: Colors.white.withOpacity(0.06), valueColor: AlwaysStoppedAnimation(primaryColor),
+            child: LinearProgressIndicator(backgroundColor: const Color.fromRGBO(255, 255, 255, 0.06), valueColor: AlwaysStoppedAnimation(primaryColor),
             ),
           )
         : Text(label);

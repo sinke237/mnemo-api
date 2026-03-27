@@ -28,9 +28,9 @@ final ColorScheme _seededDark = ColorScheme.fromSeed(
 ThemeData buildLightTheme() {
   return ThemeData(
     useMaterial3: true,
-    colorScheme: _seededLight.copyWith(surface: surfaceColor, background: cardColor),
+    colorScheme: _seededLight.copyWith(surface: surfaceColor),
     scaffoldBackgroundColor: Colors.white,
-    cardColor: cardColor.withOpacity(0.98),
+    cardColor: cardColor,
     dividerColor: borderColor,
     appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
   );
@@ -40,7 +40,7 @@ ThemeData buildDarkTheme() {
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
-    colorScheme: _seededDark.copyWith(surface: surfaceColor, background: cardColor),
+    colorScheme: _seededDark.copyWith(surface: surfaceColor),
     scaffoldBackgroundColor: surfaceColor,
     cardColor: cardColor,
     dividerColor: borderColor,
