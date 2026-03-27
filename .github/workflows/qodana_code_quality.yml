@@ -62,7 +62,7 @@ jobs:
         continue-on-error: true
 
       - name: Convert to SARIF
-        uses: advanced-security/dart-analyzer-sarif@main
+        uses: advanced-security/dart-analyzer-sarif@c25413a75736414558927e63161d16a3b2be846d
         with:
           input: apiapp/flutter-analysis.txt
           output: flutter-results.sarif

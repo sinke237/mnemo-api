@@ -5,10 +5,13 @@ class ConfidenceSelector extends StatelessWidget {
   final int selected; // 0,1,2
   final ValueChanged<int> onChanged;
 
-  const ConfidenceSelector({super.key, required this.selected, required this.onChanged});
+  const ConfidenceSelector({super.key, required this.selected, required this.onChanged})
+      : assert(selected >= 0 && selected <= 2);
 
   @override
   Widget build(BuildContext context) {
+    const colors = [accentRed, accentAmber, accentGreen];
+
     return SegmentedButton<int>(
       segments: const <ButtonSegment<int>>[
         ButtonSegment<int>(value: 0, label: Text('Low')),
@@ -23,13 +26,7 @@ class ConfidenceSelector extends StatelessWidget {
         backgroundColor: WidgetStateProperty.resolveWith<Color>(
           (Set<WidgetState> states) {
             if (states.contains(WidgetState.selected)) {
-              if (selected == 0) {
-                return accentRed.withAlpha(35);
-              } else if (selected == 1) {
-                return accentAmber.withAlpha(35);
-              } else {
-                return accentGreen.withAlpha(35);
-              }
+              return colors[selected].withAlpha(35);
             }
             return Colors.transparent;
           },

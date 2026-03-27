@@ -25,8 +25,7 @@ class TagChip extends StatelessWidget {
           IconButton(
             onPressed: onRemove,
             icon: const Icon(Icons.close, size: 14),
-            constraints: const BoxConstraints(),
-            padding: EdgeInsets.zero,
+            tooltip: 'Remove',
           ),
         ]
       ]),
