@@ -44,9 +44,6 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    defaults:
-      run:
-        working-directory: ./apiapp
     steps:
       - uses: actions/checkout@v4
 
@@ -57,12 +54,14 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+        working-directory: ./apiapp
 
       - name: Analyze code and generate SARIF
-        run: flutter analyze --format=sarif --output=../flutter-results.sarif || true
+        run: flutter analyze --format=sarif --output=flutter-results.sarif || true
+        working-directory: ./apiapp
 
       - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: flutter-results.sarif
+          sarif_file: ${{ github.workspace }}/apiapp/flutter-results.sarif
           category: flutter-analysis
