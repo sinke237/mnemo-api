@@ -156,7 +156,15 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  if (!IsWindow(window_handle_)) {
+    return false;
+  }
+
+  // Request the window to be shown normally.
+  ShowWindow(window_handle_, SW_SHOWNORMAL);
+
+  // Return true if the window exists and is visible after the call.
+  return IsWindow(window_handle_) && IsWindowVisible(window_handle_);
 }
 
 // static
@@ -229,6 +237,15 @@ Win32Window::MessageHandler(HWND hwnd,
 
 void Win32Window::Destroy() {
   OnDestroy();
+  // Detach and clear the child content early to avoid races where
+  // WM_SIZE/WM_ACTIVATE messages are delivered during DestroyWindow
+  // and would otherwise reference a stale `child_content_` handle.
+  if (child_content_) {
+    // Remove parent relationship first to prevent child messages from
+    // being routed to this window during teardown.
+    SetParent(child_content_, nullptr);
+    child_content_ = nullptr;
+  }
 
   if (window_handle_) {
     DestroyWindow(window_handle_);
