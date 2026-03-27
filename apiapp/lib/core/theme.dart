@@ -31,8 +31,6 @@ ThemeData buildLightTheme() {
     colorScheme: _seededLight.copyWith(
       surface: surfaceColor,
       onSurface: Colors.white,
-      background: cardColor,
-      onBackground: Colors.white,
     ),
     scaffoldBackgroundColor: Colors.white,
     cardColor: cardColor,

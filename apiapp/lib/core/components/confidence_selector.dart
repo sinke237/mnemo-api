@@ -20,9 +20,9 @@ class ConfidenceSelector extends StatelessWidget {
         onChanged(newSelection.first);
       },
       style: ButtonStyle(
-        backgroundColor: MaterialStateProperty.resolveWith<Color>(
-          (Set<MaterialState> states) {
-            if (states.contains(MaterialState.selected)) {
+        backgroundColor: WidgetStateProperty.resolveWith<Color>(
+          (Set<WidgetState> states) {
+            if (states.contains(WidgetState.selected)) {
               if (selected == 0) {
                 return accentRed.withAlpha(35);
               } else if (selected == 1) {
@@ -34,8 +34,8 @@ class ConfidenceSelector extends StatelessWidget {
             return Colors.transparent;
           },
         ),
-        foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
-        side: MaterialStateProperty.all<BorderSide>(
+        foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
+        side: WidgetStateProperty.all<BorderSide>(
           BorderSide(color: borderColor.withAlpha(153)),
         ),
       ),

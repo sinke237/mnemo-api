@@ -29,14 +29,14 @@ class MnemoButton extends StatelessWidget {
         : OutlinedButton.styleFrom(
             minimumSize: const Size.fromHeight(52),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            side: BorderSide(color: borderColor),
+            side: const BorderSide(color: borderColor),
           );
 
     final child = loading
-        ? SizedBox(
+        ? const SizedBox(
             height: 20,
             width: 140,
-            child: LinearProgressIndicator(backgroundColor: const Color.fromRGBO(255, 255, 255, 0.06), valueColor: AlwaysStoppedAnimation(primaryColor),
+            child: LinearProgressIndicator(backgroundColor: Color.fromRGBO(255, 255, 255, 0.06), valueColor: AlwaysStoppedAnimation(primaryColor),
             ),
           )
         : Text(label);
