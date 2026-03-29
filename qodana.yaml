@@ -34,7 +34,7 @@ exclude:
 projectJDK: "21" #(Applied in CI/CD pipeline)
 
 #Execute shell command before Qodana execution (Applied in CI/CD pipeline)
-bootstrap: echo "sdk.dir=/opt/android-sdk" > apiapp/android/local.properties
+bootstrap: printf 'sdk.dir=/opt/android-sdk\nflutter.sdk=/opt/flutter\n' > apiapp/android/local.properties
 
 #Install IDE plugins before Qodana execution (Applied in CI/CD pipeline)
 #plugins:
