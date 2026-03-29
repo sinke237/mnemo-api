@@ -241,10 +241,9 @@ async def revoke_api_key(
 
     if not success:
         logger.warning(
-            "api_key_service.revoke_api_key returned False for key_id=%s user_id=%s email=%s",
+            "api_key_service.revoke_api_key returned False for key_id=%s user_id=%s",
             key_id,
             current_user.id,
-            getattr(current_user, "email", None),
         )
         raise HTTPException(
             status_code=404,

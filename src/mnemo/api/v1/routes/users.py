@@ -58,6 +58,7 @@ def _user_not_found(user_id: str) -> HTTPException:
         400: {"model": ErrorResponse, "description": "Invalid country code or timezone"},
         401: {"model": ErrorResponse, "description": "Invalid API key"},
         403: {"model": ErrorResponse, "description": "Insufficient scope (requires admin)"},
+        409: {"model": ErrorResponse, "description": "Email or display name conflict"},
     },
     summary="Create a new user",
     description=(
@@ -89,6 +90,8 @@ async def create_user(
             display_name=user_data.display_name,
             role=user_data.role or "user",
             create_live_key=user_data.create_live_key,
+            preferred_language=user_data.preferred_language,
+            daily_goal_cards=user_data.daily_goal_cards,
         )
 
         # `user_service.provision_user` returns a plain API key as the
@@ -213,6 +216,7 @@ async def get_user(
         400: {"model": ErrorResponse, "description": "Invalid timezone"},
         401: {"model": ErrorResponse, "description": "Invalid or expired token"},
         403: {"model": ErrorResponse, "description": "Forbidden"},
+        409: {"model": ErrorResponse, "description": "Email or display name conflict"},
         404: {"model": ErrorResponse, "description": "User not found"},
     },
     summary="Update user profile",

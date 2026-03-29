@@ -114,11 +114,21 @@ async def request_password_reset(
         settings = get_settings()
         redis = get_redis()
         try:
-            key = f"prr:{user.email}"
-            count = await redis.incr(key)
-            # set expiry on first increment
-            if count == 1:
-                await redis.expire(key, 3600)
+            # Use non-PII identifier for rate-limiting key (avoid raw email)
+            key = f"prr:{user.id}"
+            # Atomic INCR + EXPIRE via EVAL (same pattern as rate limit middleware)
+            lua = (
+                "local c=redis.call('INCR', KEYS[1]); "
+                "if c==1 then redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1])) end; return c"
+            )
+            try:
+                count = await redis.eval(lua, 1, key, 3600)
+            except Exception:
+                # Fallback for clients that don't support eval similarly
+                count = await redis.incr(key)
+                if count == 1:
+                    await redis.expire(key, 3600)
+
             if count > settings.password_reset_rate_limit_per_hour:
                 # Silently succeed to avoid enumeration, but do not send another email.
                 return RequestPasswordResetResponse()
@@ -132,18 +142,35 @@ async def request_password_reset(
             )
 
         # Create token and enqueue email in the background. Token is returned
-        # plaintext once by create_token and stored hashed in DB.
-        token = await password_reset_service.create_token(db, user.id)
-        # Attach optional request id if present in state (for tracing)
-        # The password reset model has an optional `request_id` column; callers
-        # may populate this if desired.
-        settings = get_settings()
-        frontend = getattr(settings, "frontend_base_url", settings.api_base_url)
-        reset_url = f"{frontend}/reset-password#token={token}"
-        # Enqueue sending the email via BackgroundTasks (placeholder service)
-        background_tasks.add_task(
-            email_service.send_password_reset_email, user.email, reset_url, user_id=user.id
-        )
+        # plaintext once by create_token and stored hashed in DB. Wrap in
+        # try/except so side-effect failures don't enable enumeration.
+        try:
+            token = await password_reset_service.create_token(db, user.id)
+            # Attach optional request id if present in state (for tracing)
+            # The password reset model has an optional `request_id` column; callers
+            # may populate this if desired.
+            settings = get_settings()
+            frontend = getattr(settings, "frontend_base_url", settings.api_base_url)
+            reset_url = f"{frontend}/reset-password#token={token}"
+            # Enqueue sending the email via BackgroundTasks (placeholder service)
+            background_tasks.add_task(
+                email_service.send_password_reset_email, user.email, reset_url, user_id=user.id
+            )
+        except Exception:
+            logger = logging.getLogger(__name__)
+            logger.exception(
+                "Failed to create or send password reset token",
+                extra={"user_id": getattr(user, "id", None), "email": getattr(user, "email", None)},
+            )
+            # Roll back DB transaction on failure of side-effects so state isn't partially applied
+            try:
+                await db.rollback()
+            except Exception:
+                # Log rollback failures for operator visibility but do not
+                # re-raise so the endpoint stays idempotent from the caller's
+                # perspective.
+                logging.exception("Failed to rollback DB after password reset side-effect failure")
+            return RequestPasswordResetResponse()
 
     return RequestPasswordResetResponse()
 
@@ -170,8 +197,8 @@ async def reset_password(
 
     TODO: Implement token validation and password reset.
     """
-    # 1. Validate token (check expiry, not used)
-    token_row = await password_reset_service.get_token_by_plain(db, request.token)
+    # 1. Atomically validate token and mark it used to prevent reuse/races
+    token_row = await password_reset_service.consume_token_by_plain(db, request.token)
     if token_row is None:
         raise HTTPException(
             status_code=400,
@@ -205,9 +232,8 @@ async def reset_password(
             },
         )
 
-    # 3. Update the user's password and mark token used
+    # 3. Update the user's password (token already marked used)
     user.password_hash = get_password_hash(request.new_password)
-    await password_reset_service.mark_token_used(db, token_row.id)
     await db.flush()
 
     return ResetPasswordResponse()

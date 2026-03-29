@@ -9,6 +9,7 @@ import logging
 import smtplib
 from email.message import EmailMessage
 from importlib import resources
+from urllib.parse import urlparse
 
 from mnemo.core.config import get_settings
 
@@ -23,17 +24,34 @@ def send_password_reset_email(email: str, reset_url: str, *, user_id: str | None
     """
     # IMPORTANT: do not log the raw token or include it in telemetry.
     settings = get_settings()
-    logger.info("Password reset requested for %s (user_id=%s)", email, user_id)
+
+    def mask_email(addr: str) -> str:
+        try:
+            local, domain = addr.split("@", 1)
+        except Exception:
+            return "***"
+        if not local:
+            return f"***@{domain}"
+        return f"{local[0]}***@{domain}"
+
+    masked = mask_email(email)
+    logger.info("Password reset requested (user_id=%s, recipient=%s)", user_id, masked)
     # Do NOT log the raw reset URL or token. Log only that a link was generated
     # and the destination domain for telemetry.
     try:
         settings = get_settings()
-        logger.debug("Reset link domain: %s", settings.frontend_base_url)
+        # Log only the frontend domain for telemetry to avoid leaking full URLs
+        try:
+            parsed = urlparse(settings.frontend_base_url)
+            frontend_domain = parsed.netloc or settings.frontend_base_url
+        except Exception:
+            frontend_domain = settings.frontend_base_url
+        logger.debug("Reset link domain: %s", frontend_domain)
     except Exception:
         logger.debug("Reset link generated")
 
     if not settings.smtp_enabled:
-        logger.info("SMTP disabled; skipping actual send for %s", email)
+        logger.info("SMTP disabled; skipping actual send for %s", masked)
         return
 
     # Render email from template stored in package resources. Template must not
@@ -59,25 +77,28 @@ def send_password_reset_email(email: str, reset_url: str, *, user_id: str | None
     msg.set_content(body)
 
     try:
-        if settings.smtp_use_tls:
-            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
-                smtp.starttls()
+        if getattr(settings, "smtp_implicit_ssl", False):
+            # Implicit SSL (SMTPS), typically on port 465
+            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=10) as smtp_ssl:
                 if settings.smtp_username and settings.smtp_password:
-                    smtp.login(settings.smtp_username, settings.smtp_password)
-                smtp.send_message(msg)
+                    smtp_ssl.login(settings.smtp_username, settings.smtp_password)
+                smtp_ssl.send_message(msg)
+        elif settings.smtp_use_tls:
+            # Use STARTTLS: open plain connection then upgrade
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp_tls:
+                smtp_tls.starttls()
+                if settings.smtp_username and settings.smtp_password:
+                    smtp_tls.login(settings.smtp_username, settings.smtp_password)
+                smtp_tls.send_message(msg)
         else:
-            # Use SMTP_SSL only if a TLS connection is desired at the socket layer.
-            try:
-                with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
-                    if settings.smtp_username and settings.smtp_password:
-                        smtp.login(settings.smtp_username, settings.smtp_password)
-                    smtp.send_message(msg)
-            except smtplib.SMTPException:
-                # Fall back to plain SMTP if SSL connection refused
-                with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
-                    if settings.smtp_username and settings.smtp_password:
-                        smtp.login(settings.smtp_username, settings.smtp_password)
-                    smtp.send_message(msg)
+            # Plain SMTP (no implicit SSL)
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp_plain:
+                if settings.smtp_username and settings.smtp_password:
+                    smtp_plain.login(settings.smtp_username, settings.smtp_password)
+                smtp_plain.send_message(msg)
         logger.info("Password reset email sent to %s", email)
     except Exception:
-        logger.exception("Failed to send password reset email to %s", email)
+        # Log exception with masked recipient to avoid leaking PII
+        logger.exception(
+            "Failed to send password reset email (user_id=%s, recipient=%s)", user_id, masked
+        )

@@ -76,6 +76,9 @@ class Settings(BaseSettings):
     smtp_username: str | None = Field(default=None)
     smtp_password: str | None = Field(default=None)
     smtp_use_tls: bool = Field(default=False)
+    # When True, open an implicit SSL (SMTPS) connection (typically port 465).
+    # This is separate from `smtp_use_tls` which controls STARTTLS upgrade.
+    smtp_implicit_ssl: bool = Field(default=False)
     smtp_from_address: str = Field(default="no-reply@mnemo.local")
     # Rate limit for password reset requests per email address (per hour).
     password_reset_rate_limit_per_hour: int = Field(default=5)

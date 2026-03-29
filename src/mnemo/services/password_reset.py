@@ -87,12 +87,29 @@ async def get_token_by_plain(db: AsyncSession, token: str) -> PasswordResetToken
     return result.scalar_one_or_none()
 
 
-async def mark_token_used(db: AsyncSession, token_id: str) -> None:
+async def consume_token_by_plain(db: AsyncSession, token: str) -> PasswordResetToken | None:
+    """Atomically validate a plaintext token and mark it as used.
+
+    Returns the token row after marking `used_at`, or None if invalid/expired/already used.
+    """
+    token_hash = _hash_token(token)
     now = datetime.now(UTC)
-    # Mark used_at timestamp to prevent reuse
-    result = await db.execute(select(PasswordResetToken).where(PasswordResetToken.id == token_id))
+
+    # Select the row FOR UPDATE to avoid race conditions, then mark used_at
+    stmt = (
+        select(PasswordResetToken)
+        .where(
+            PasswordResetToken.token_hash == token_hash,
+            PasswordResetToken.used_at.is_(None),
+            PasswordResetToken.expires_at > now,
+        )
+        .with_for_update()
+    )
+    result = await db.execute(stmt)
     row = result.scalar_one_or_none()
     if row is None:
-        return
+        return None
+
     row.used_at = now
     await db.flush()
+    return row

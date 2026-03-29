@@ -93,6 +93,8 @@ async def admin_provision_user(
             display_name=body.display_name,
             role=role,
             create_live_key=create_live_key,
+            preferred_language=body.preferred_language,
+            daily_goal_cards=body.daily_goal_cards,
         )
     except (
         EmailConflictError,

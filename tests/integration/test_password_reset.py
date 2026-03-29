@@ -32,8 +32,9 @@ async def test_password_reset_token_lifecycle(db_session: AsyncSession) -> None:
     token_row = await password_reset_service.get_token_by_plain(db_session, token)
     assert token_row is not None
 
-    # Mark used and ensure it is no longer found
-    await password_reset_service.mark_token_used(db_session, token_row.id)
+    # Consume the token atomically and ensure it is no longer found
+    consumed = await password_reset_service.consume_token_by_plain(db_session, token)
+    assert consumed is not None
     token_row_after = await password_reset_service.get_token_by_plain(db_session, token)
     assert token_row_after is None
 
@@ -73,6 +74,16 @@ async def test_reset_endpoint_resets_password(db_session: AsyncSession) -> None:
             json={"token": token, "new_password": new_password},
         )
     assert resp.status_code == 200, resp.text
+
+    # Re-using the same token should fail because tokens are single-use
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp_reuse = await client.post(
+            "/v1/user/reset-password",
+            json={"token": token, "new_password": new_password},
+        )
+    assert resp_reuse.status_code != 200, (
+        "Reusing a password reset token should fail: " + resp_reuse.text
+    )
 
     # Verify login with new password succeeds
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

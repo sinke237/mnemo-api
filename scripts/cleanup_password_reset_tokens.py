@@ -16,6 +16,8 @@ async def main() -> None:
     async with engine.connect() as conn:
         async with AsyncSession(bind=conn) as session:
             deleted = await pr_service.delete_expired_tokens(session)
+            # Ensure deletions persist by committing on the same AsyncSession
+            await session.commit()
             print(f"Deleted {deleted} expired password reset tokens")
 
 

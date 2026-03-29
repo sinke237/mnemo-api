@@ -141,6 +141,8 @@ async def provision_user(
             display_name=body.display_name,
             role="user",  # Public registration always creates regular users
             create_live_key=False,  # Public registration always creates test keys
+            preferred_language=body.preferred_language,
+            daily_goal_cards=body.daily_goal_cards,
         )
     except (
         EmailConflictError,
@@ -258,13 +260,21 @@ async def revoke_admin_access(
     supplied, preserve legacy behavior and clear the user's global flag.
     """
     if body is None or body.resource is None:
+        # Revoke any per-resource consents as well as the global flag so that
+        # the effective access (has_admin_consent OR admin_access_granted)
+        # is fully revoked.
+        await user_service.revoke_admin_consent(db=db, user_id=current_user.id)
         current_user.admin_access_granted = False
         current_user.admin_access_granted_at = None
         await db.flush()
         return GrantAdminAccessResponse(admin_access_granted=False, granted_at=None)
 
-    # Revoke per-resource consents matching the body
+    # Revoke per-resource consents matching the body and also clear the
+    # global admin_access_granted flag to ensure access is fully revoked.
     await user_service.revoke_admin_consent(
         db=db, user_id=current_user.id, resource=body.resource, resource_id=body.resource_id
     )
+    current_user.admin_access_granted = False
+    current_user.admin_access_granted_at = None
+    await db.flush()
     return GrantAdminAccessResponse(admin_access_granted=False, granted_at=None)

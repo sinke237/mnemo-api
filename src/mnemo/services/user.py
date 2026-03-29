@@ -12,7 +12,11 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mnemo.core.constants import ADMIN_API_KEY_SCOPES, DEFAULT_API_KEY_SCOPES
+from mnemo.core.constants import (
+    ADMIN_API_KEY_SCOPES,
+    DEFAULT_API_KEY_SCOPES,
+    DEFAULT_DAILY_GOAL_CARDS,
+)
 from mnemo.core.exceptions import (
     DisplayNameConflictError,
     EmailConflictError,
@@ -187,6 +191,8 @@ async def provision_user(
     display_name: str | None = None,
     role: str = "user",
     create_live_key: bool = False,
+    preferred_language: str | None = None,
+    daily_goal_cards: int | None = None,
 ) -> tuple[User, str, str]:
     """
     UNIFIED user provisioning function.
@@ -252,6 +258,10 @@ async def provision_user(
         country=country,
         timezone=resolved_timezone,
         role=role,
+        preferred_language=preferred_language or "en",
+        daily_goal_cards=(
+            daily_goal_cards if daily_goal_cards is not None else DEFAULT_DAILY_GOAL_CARDS
+        ),
     )
     db.add(user)
 
@@ -303,6 +313,8 @@ async def create_user(db: AsyncSession, user_data: UserProvisionRequest) -> User
         display_name=getattr(user_data, "display_name", None),
         role=getattr(user_data, "role", "user") or "user",
         create_live_key=False,
+        preferred_language=getattr(user_data, "preferred_language", None),
+        daily_goal_cards=getattr(user_data, "daily_goal_cards", None),
     )
     return user
 
@@ -409,21 +421,29 @@ async def create_admin_consent(
     import secrets
 
     # Check for an existing consent first to avoid duplicate global consents
-    from sqlalchemy import select
+    from sqlalchemy import or_, select
 
     from mnemo.models.user_admin_consent import UserAdminConsent
 
+    # Validate expires_at: do not allow creating already-expired consents
+    now = datetime.now(UTC)
+    if expires_at is not None and expires_at <= now:
+        raise ValueError("expires_at must be in the future")
+
+    # Only consider existing consents that are still valid (non-expiring or not yet expired)
     if resource_id is None:
         existing_stmt = select(UserAdminConsent).where(
             UserAdminConsent.user_id == user_id,
             UserAdminConsent.resource_type == resource,
             UserAdminConsent.resource_id.is_(None),
+            or_(UserAdminConsent.expires_at.is_(None), UserAdminConsent.expires_at > now),
         )
     else:
         existing_stmt = select(UserAdminConsent).where(
             UserAdminConsent.user_id == user_id,
             UserAdminConsent.resource_type == resource,
             UserAdminConsent.resource_id == resource_id,
+            or_(UserAdminConsent.expires_at.is_(None), UserAdminConsent.expires_at > now),
         )
 
     result = await db.execute(existing_stmt.limit(1))
@@ -444,6 +464,7 @@ async def create_admin_consent(
         await db.flush()
     except IntegrityError:
         # Concurrent insert created the same consent — return the existing one
+        # Re-query using the valid-row query to avoid returning expired rows
         result = await db.execute(existing_stmt.limit(1))
         existing = result.scalar_one_or_none()
         if existing is not None:
