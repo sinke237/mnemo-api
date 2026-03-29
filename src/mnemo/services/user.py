@@ -130,6 +130,15 @@ async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
     """
     normalized = normalize_email(email)
     result = await db.execute(select(User).where(User.normalized_email == normalized))
+    user = result.scalar_one_or_none()
+    if user is not None:
+        return user
+
+    # Fallback: during staged email collection some addresses may be stored
+    # in `normalized_email_placeholder`. Allow lookup there to preserve
+    # legacy login paths while operators are validating and migrating
+    # placeholder addresses into the primary `email` column.
+    result = await db.execute(select(User).where(User.normalized_email_placeholder == normalized))
     return result.scalar_one_or_none()
 
 

@@ -29,6 +29,15 @@ def upgrade() -> None:
     # Step 1: Add email fields as NULLABLE first
     op.add_column("users", sa.Column("email", sa.String(length=255), nullable=True))
     op.add_column("users", sa.Column("normalized_email", sa.String(length=255), nullable=True))
+    # Add placeholder columns to collect emails without touching the primary `email`
+    op.add_column(
+        "users",
+        sa.Column("email_placeholder", sa.String(length=255), nullable=True),
+    )
+    op.add_column(
+        "users",
+        sa.Column("normalized_email_placeholder", sa.String(length=255), nullable=True),
+    )
     op.add_column(
         "users",
         sa.Column(
@@ -69,6 +78,8 @@ def upgrade() -> None:
         sa.column("id", sa.String),
         sa.column("email", sa.String),
         sa.column("normalized_email", sa.String),
+        sa.column("email_placeholder", sa.String),
+        sa.column("normalized_email_placeholder", sa.String),
     )
 
     batch_size = 1000
@@ -85,23 +96,26 @@ def upgrade() -> None:
             conn.execute(
                 sa.update(users_table)
                 .where(users_table.c.id == uid)
-                .values(email=placeholder, normalized_email=placeholder)
+                .values(
+                    email_placeholder=placeholder,
+                    normalized_email_placeholder=placeholder,
+                )
             )
 
-    # Step 3: Make email fields NOT NULL after backfill
-    op.alter_column("users", "email", nullable=False)
-    op.alter_column("users", "normalized_email", nullable=False)
-
-    # Step 4: Add unique constraints and indexes
-    op.create_unique_constraint("uq_users_email", "users", ["email"])
-    op.create_unique_constraint("uq_users_normalized_email", "users", ["normalized_email"])
+    # Step 3: Do NOT make `email` NOT NULL or UNIQUE here.
+    # Operators should validate addresses collected in `email_placeholder`
+    # (e.g., via an out-of-band verification step) and then run a follow-up
+    # migration that copies validated addresses from
+    # `email_placeholder` -> `email` and sets NOT NULL / UNIQUE constraints.
 
 
 def downgrade() -> None:
     """Remove email fields from users table."""
-    op.drop_constraint("uq_users_normalized_email", "users", type_="unique")
-    op.drop_constraint("uq_users_email", "users", type_="unique")
     op.drop_column("users", "email_verified_at")
     op.drop_column("users", "email_verified")
+    # Drop placeholder columns added in this migration
+    op.drop_column("users", "normalized_email_placeholder")
+    op.drop_column("users", "email_placeholder")
+
     op.drop_column("users", "normalized_email")
     op.drop_column("users", "email")

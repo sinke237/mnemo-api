@@ -29,6 +29,10 @@ class User(Base):
     normalized_email: Mapped[str] = mapped_column(
         String(255), nullable=False, unique=True, index=True
     )
+    # Placeholder columns populated during staged email collection; nullable
+    # until a follow-up migration promotes placeholders to the primary fields.
+    email_placeholder: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    normalized_email_placeholder: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email_verified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
