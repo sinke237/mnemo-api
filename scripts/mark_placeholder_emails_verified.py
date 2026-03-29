@@ -16,7 +16,6 @@ from __future__ import annotations
 import asyncio
 import argparse
 import logging
-from typing import list
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -90,22 +89,22 @@ async def main(argv: list[str] | None = None) -> int:
         total = 0
         if args.ids:
             ids = [s.strip() for s in args.ids.split(",") if s.strip()]
-            logger.info("Marking by ids", ids=ids)
+            logger.info("Marking by ids: %s", ids)
             changed = await mark_by_ids(session, ids)
-            logger.info("Updated rows", count=changed)
+            logger.info("Updated rows: %d", changed)
             total += changed
 
         if args.emails:
             emails = [s.strip() for s in args.emails.split(",") if s.strip()]
-            logger.info("Marking by emails", emails=emails)
+            logger.info("Marking by emails: %s", emails)
             changed = await mark_by_emails(session, emails)
-            logger.info("Updated rows", count=changed)
+            logger.info("Updated rows: %d", changed)
             total += changed
 
         if args.all:
             logger.info("Marking all placeholder emails as verified")
             changed = await mark_all_placeholders(session)
-            logger.info("Updated rows", count=changed)
+            logger.info("Updated rows: %d", changed)
             total += changed
 
         if total == 0:

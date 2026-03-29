@@ -5,16 +5,16 @@ Revises: 7ada38a5dbc7
 Create Date: 2026-03-29 12:00:00.000000
 
 This migration:
-1. Adds email, normalized_email, email_verified, email_verified_at fields
-2. Backfills existing users with placeholder emails (MANUAL ACTION REQUIRED)
-3. Makes email NOT NULL after backfill
-4. Adds unique constraints and indexes
+1. Adds `email`, `normalized_email`, `email_verified`, and `email_verified_at` fields.
+2. Backfills existing users with placeholder emails in `email_placeholder`/`normalized_email_placeholder` (MANUAL ACTION REQUIRED).
+
+Note: This migration does NOT make `email` NOT NULL or add UNIQUE constraints/indexes. Those operations are intentionally deferred to a follow-up migration that promotes validated placeholder addresses into the primary `email`/`normalized_email` columns and then applies NOT NULL / UNIQUE constraints. Operators should validate collected placeholder addresses before running the follow-up migration.
 """
 
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import op, context
 
 # revision identifiers, used by Alembic.
 revision: str = "add_email_to_users"
@@ -72,7 +72,9 @@ def upgrade() -> None:
     # The relevant variables/blocks are `batch_size`, the outer `while` loop,
     # and the per-id UPDATE block around `placeholder` + `sa.update(users_table)`.
     # Use care if converting to a set-based update to ensure SQL injection safety.
-    conn = op.get_bind()
+    # Only perform backfill when running online; offline SQL generation
+    # cannot run queries or per-row updates. In offline mode we skip the
+    # backfill so SQL scripts can still be generated.
     users_table = sa.table(
         "users",
         sa.column("id", sa.String),
@@ -81,26 +83,39 @@ def upgrade() -> None:
         sa.column("email_placeholder", sa.String),
         sa.column("normalized_email_placeholder", sa.String),
     )
-
-    batch_size = 1000
-    while True:
-        ids = [row[0] for row in conn.execute(
-            sa.select(users_table.c.id).where(users_table.c.email.is_(None)).limit(batch_size)
-        ).fetchall()]
-        if not ids:
-            break
-
-        # Perform per-id parameterised updates to avoid SQL dialect-specific concat
-        for uid in ids:
-            placeholder = f"user_{uid}@placeholder.mnemo.local"
-            conn.execute(
-                sa.update(users_table)
-                .where(users_table.c.id == uid)
-                .values(
-                    email_placeholder=placeholder,
-                    normalized_email_placeholder=placeholder,
-                )
+    if not context.is_offline_mode():
+        conn = op.get_bind()
+        batch_size = 1000
+        # Paginate by id to ensure the loop advances. Selecting solely on
+        # `email IS NULL` while writing to `email_placeholder` would re-select
+        # the same rows and create an infinite loop because `email` remains NULL.
+        last_id = ""
+        while True:
+            stmt = (
+                sa.select(users_table.c.id)
+                .where(sa.and_(users_table.c.email.is_(None), users_table.c.id > last_id))
+                .order_by(users_table.c.id)
+                .limit(batch_size)
             )
+            ids = [row[0] for row in conn.execute(stmt).fetchall()]
+            if not ids:
+                break
+
+            # Perform per-id parameterised updates to avoid SQL dialect-specific concat
+            for uid in ids:
+                placeholder = f"user_{uid}@placeholder.mnemo.local"
+                conn.execute(
+                    sa.update(users_table)
+                    .where(users_table.c.id == uid)
+                    .values(
+                        email_placeholder=placeholder,
+                        normalized_email_placeholder=placeholder,
+                    )
+                )
+
+            # Advance the cursor so the next iteration selects the following batch.
+            # Use the lexicographically largest id in this batch as the cursor.
+            last_id = max(ids)
 
     # Step 3: Do NOT make `email` NOT NULL or UNIQUE here.
     # Operators should validate addresses collected in `email_placeholder`

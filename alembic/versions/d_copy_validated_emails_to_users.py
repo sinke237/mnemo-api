@@ -18,7 +18,7 @@ accurately reflects verified addresses before applying this migration.
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import op, context
 
 # revision identifiers, used by Alembic.
 revision: str = "copy_validated_emails"
@@ -56,9 +56,32 @@ def upgrade() -> None:
         )
     )
 
-    conn.execute(stmt)
+    # Execute copy only when running online. Offline SQL generation cannot
+    # execute queries; skip the copy step in that mode so SQL can be
+    # generated. In online mode, perform the copy and perform a preflight
+    # null-check before applying NOT NULL constraints.
+    if not context.is_offline_mode():
+        conn.execute(stmt)
 
-    # Now make email fields NOT NULL and add UNIQUE constraints
+        # Now make email fields NOT NULL and add UNIQUE constraints
+        # Preflight: ensure there are no NULL email values remaining before
+        # applying NOT NULL constraints. If rows remain NULL, abort with an
+        # actionable error rather than letting the DB raise a less-informative
+        # constraint violation.
+        null_check_stmt = sa.select(sa.func.count()).select_from(users_table).where(
+            sa.or_(users_table.c.email.is_(None), users_table.c.normalized_email.is_(None))
+        )
+        null_count = conn.execute(null_check_stmt).scalar() or 0
+        if null_count:
+            raise RuntimeError(
+                f"Cannot make users.email/normalized_email NOT NULL: {null_count} rows have NULL values."
+                " Ensure validated placeholder addresses were copied into the primary columns"
+                " (see d_copy_validated_emails_to_users migration) and re-run this migration."
+            )
+
+    # Emit the NOT NULL change and unique constraints in both online and
+    # offline modes. In offline mode these will be rendered into SQL; in
+    # online mode they will be executed after the checks above.
     op.alter_column("users", "email", nullable=False)
     op.alter_column("users", "normalized_email", nullable=False)
 

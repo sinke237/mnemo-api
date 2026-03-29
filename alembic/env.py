@@ -42,6 +42,20 @@ def run_migrations_offline() -> None:
         )
     except Exception as exc:  # pragma: no cover - defense for CI/environments
         msg = str(exc)
+        # Log that we are falling back to a safer configuration so callers
+        # have observability into why `literal_binds` couldn't be used.
+        try:
+            ctx_logger = context.get_context_logger()
+            ctx_logger.warning(
+                "run_migrations_offline: falling back to configure() without literal_binds - reason=%s, url=%s, target_metadata_present=%s",
+                msg,
+                url,
+                bool(target_metadata),
+            )
+        except Exception:
+            # If the alembic context logger isn't available or logging fails,
+            # don't let it block the fallback path.
+            pass
         if "literal_binds" in msg or "as_sql" in msg:
             context.configure(
                 url=url,
