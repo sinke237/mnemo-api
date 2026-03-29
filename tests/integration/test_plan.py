@@ -14,6 +14,7 @@ Covers:
 """
 
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import date
 
 import pytest
@@ -43,7 +44,7 @@ async def _make_user_with_key(
 ) -> tuple[User, str]:
     """Create a user + API key, return (user, plain_api_key)."""
     user_data = UserCreate(
-        display_name="Plan Tester",
+        display_name=f"PlanTester_{uuid.uuid4().hex[:8]}",
         country=country,
         timezone=timezone,
         preferred_language="en",
@@ -64,14 +65,14 @@ async def _make_user_with_key(
 async def _get_token(client: AsyncClient, user_id: str, api_key: str) -> str:
     resp = await client.post("/v1/auth/token", json={"user_id": user_id, "api_key": api_key})
     assert resp.status_code == 200, resp.text
-    return resp.json()["access_token"]
+    return str(resp.json()["access_token"])
 
 
 # ── fixture ───────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture
-async def plan_client(db_session: AsyncSession) -> AsyncClient:
+async def plan_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """
     HTTP client backed by the real app.
 

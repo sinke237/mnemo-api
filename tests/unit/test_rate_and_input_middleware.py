@@ -9,7 +9,7 @@ from tests.helpers.fake_redis import FakeRedis
 
 
 @pytest.fixture(autouse=True)
-def reset_settings_after_test():
+def reset_settings_after_test() -> None:
     """Ensure settings cache is cleared and module reloaded after each test."""
     yield
     from mnemo.core.config import get_settings
@@ -20,7 +20,7 @@ def reset_settings_after_test():
 
 
 @pytest.mark.asyncio
-async def test_rate_limit_per_api_key(monkeypatch):
+async def test_rate_limit_per_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeRedis()
 
     # Monkeypatch Redis and set low read limit via middleware method override
@@ -64,7 +64,7 @@ async def test_rate_limit_per_api_key(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_input_size_limit_rejects(monkeypatch):
+async def test_input_size_limit_rejects(monkeypatch: pytest.MonkeyPatch) -> None:
     # Small max size
     # Ensure app uses a fake redis client (health check and rate middleware)
     fake2 = FakeRedis()

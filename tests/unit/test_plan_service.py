@@ -9,7 +9,7 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -60,7 +60,7 @@ def _make_db(deck: Deck | None = None, plan: StudyPlan | None = None) -> AsyncMo
 # ── generate_schedule unit tests ──────────────────────────────────────────────
 
 
-def test_schedule_length_matches_days():
+def test_schedule_length_matches_days() -> None:
     start = date(2025, 11, 1)
     schedule = generate_schedule(
         total_cards=50,
@@ -73,7 +73,7 @@ def test_schedule_length_matches_days():
     assert len(schedule) == 7
 
 
-def test_schedule_day_numbers_are_sequential():
+def test_schedule_day_numbers_are_sequential() -> None:
     start = date(2025, 11, 1)
     schedule = generate_schedule(
         total_cards=56,
@@ -87,7 +87,7 @@ def test_schedule_day_numbers_are_sequential():
         assert entry["day"] == i
 
 
-def test_schedule_dates_are_consecutive_local_dates():
+def test_schedule_dates_are_consecutive_local_dates() -> None:
     """Each schedule date must be exactly one calendar day after the previous."""
     start = date(2025, 11, 2)
     schedule = generate_schedule(
@@ -99,11 +99,11 @@ def test_schedule_dates_are_consecutive_local_dates():
         deck_name="Biology",
     )
     for i, entry in enumerate(schedule):
-        expected = (start + __import__("datetime").timedelta(days=i)).isoformat()
+        expected = (start + timedelta(days=i)).isoformat()
         assert entry["date"] == expected
 
 
-def test_schedule_day1_has_no_reviews():
+def test_schedule_day1_has_no_reviews() -> None:
     """Day 1 must consist entirely of new cards (zero review overhead)."""
     start = date(2026, 1, 1)
     schedule = generate_schedule(
@@ -117,7 +117,7 @@ def test_schedule_day1_has_no_reviews():
     assert schedule[0]["cards_to_study"] == 4  # exactly daily_target, no reviews
 
 
-def test_schedule_reviews_increase_from_day2():
+def test_schedule_reviews_increase_from_day2() -> None:
     """cards_to_study on day 2 should exceed daily_target due to review load."""
     start = date(2026, 3, 21)
     schedule = generate_schedule(
@@ -134,7 +134,7 @@ def test_schedule_reviews_increase_from_day2():
     assert schedule[1]["cards_to_study"] == 25
 
 
-def test_schedule_capped_by_max_cards_per_day():
+def test_schedule_capped_by_max_cards_per_day() -> None:
     """cards_to_study must not exceed max_cards_per_day at any point."""
     start = date(2026, 3, 21)
     max_daily = 10
@@ -150,7 +150,7 @@ def test_schedule_capped_by_max_cards_per_day():
         assert entry["cards_to_study"] <= max_daily
 
 
-def test_schedule_focus_day1_contains_deck_name():
+def test_schedule_focus_day1_contains_deck_name() -> None:
     start = date(2026, 3, 21)
     schedule = generate_schedule(
         total_cards=10,
@@ -163,7 +163,7 @@ def test_schedule_focus_day1_contains_deck_name():
     assert "PSD2" in schedule[0]["focus"]
 
 
-def test_schedule_focus_day2_mentions_reviews():
+def test_schedule_focus_day2_mentions_reviews() -> None:
     start = date(2026, 3, 21)
     schedule = generate_schedule(
         total_cards=30,
@@ -176,7 +176,7 @@ def test_schedule_focus_day2_mentions_reviews():
     assert "review" in schedule[1]["focus"].lower()
 
 
-def test_schedule_consolidation_phase_when_new_cards_exhausted():
+def test_schedule_consolidation_phase_when_new_cards_exhausted() -> None:
     """Once all new cards are introduced, focus should indicate review/consolidation."""
     start = date(2026, 3, 21)
     # 5 cards, daily_target=5 → after day 1, no new cards remain
@@ -200,7 +200,7 @@ def test_schedule_consolidation_phase_when_new_cards_exhausted():
 # ── Timezone date label tests (FR-07.2) ───────────────────────────────────────
 
 
-def test_today_in_timezone_utc_plus3():
+def test_today_in_timezone_utc_plus3() -> None:
     """A datetime at 23:00 UTC should appear as next day in UTC+3."""
     # 2025-11-01T23:00:00 UTC → 2025-11-02T02:00:00 Africa/Nairobi (UTC+3)
     utc_midnight = datetime(2025, 11, 1, 23, 0, 0, tzinfo=UTC)
@@ -208,7 +208,7 @@ def test_today_in_timezone_utc_plus3():
     assert local_date == date(2025, 11, 2)
 
 
-def test_today_in_timezone_utc_minus5():
+def test_today_in_timezone_utc_minus5() -> None:
     """A datetime at 01:00 UTC should appear as previous day in UTC-5."""
     # 2025-11-02T01:00:00 UTC → 2025-11-01T20:00:00 America/New_York (UTC-5 in Nov)
     utc_early = datetime(2025, 11, 2, 1, 0, 0, tzinfo=UTC)
@@ -216,7 +216,7 @@ def test_today_in_timezone_utc_minus5():
     assert local_date == date(2025, 11, 1)
 
 
-def test_schedule_start_date_reflects_user_timezone():
+def test_schedule_start_date_reflects_user_timezone() -> None:
     """
     When a plan is generated, the first schedule date must be today in the
     user's local timezone, not today in UTC.
@@ -239,7 +239,7 @@ def test_schedule_start_date_reflects_user_timezone():
     assert schedule[2]["date"] == "2025-11-04"
 
 
-def test_schedule_start_date_utc_minus_timezone():
+def test_schedule_start_date_utc_minus_timezone() -> None:
     """User in UTC-5: 2025-11-02T01:00 UTC → local date 2025-11-01."""
     utc_now = datetime(2025, 11, 2, 1, 0, 0, tzinfo=UTC)
     local_start = _today_in_timezone("America/New_York", now=utc_now)
@@ -259,7 +259,7 @@ def test_schedule_start_date_utc_minus_timezone():
 
 
 @pytest.mark.asyncio
-async def test_create_plan_raises_deck_not_found():
+async def test_create_plan_raises_deck_not_found() -> None:
     """create_plan must raise DeckNotFoundError when deck does not exist."""
     db = _make_db(deck=None)
     user = _make_user("UTC")
@@ -271,7 +271,7 @@ async def test_create_plan_raises_deck_not_found():
 
 
 @pytest.mark.asyncio
-async def test_create_plan_happy_path():
+async def test_create_plan_happy_path() -> None:
     """create_plan returns a StudyPlan with correctly computed fields."""
     deck = _make_deck(card_count=28, name="OAuth 2.0")
     db = _make_db(deck=deck)
@@ -302,16 +302,22 @@ async def test_create_plan_happy_path():
     assert plan.goal == "Pass OAuth certification"
     assert plan.days == 7
     assert plan.daily_target >= 1
+    assert isinstance(plan.schedule, list)
     assert len(plan.schedule) == 7
     # All schedule dates must be YYYY-MM-DD strings
     for entry in plan.schedule:
+        assert isinstance(entry, dict)
+        assert isinstance(entry["date"], str), f"date should be str, got {type(entry['date'])}"
+        assert isinstance(
+            entry["cards_to_study"], int
+        ), f"cards_to_study should be int, got {type(entry['cards_to_study'])}"
         assert len(entry["date"]) == 10
         assert entry["date"][4] == "-" and entry["date"][7] == "-"
         assert entry["cards_to_study"] >= 1
 
 
 @pytest.mark.asyncio
-async def test_create_plan_daily_target_uses_time_budget():
+async def test_create_plan_daily_target_uses_time_budget() -> None:
     """When daily_minutes is very small the daily_target is capped by time budget."""
     deck = _make_deck(card_count=100)
     db = _make_db(deck=deck)
@@ -331,7 +337,7 @@ async def test_create_plan_daily_target_uses_time_budget():
 
 
 @pytest.mark.asyncio
-async def test_create_plan_empty_deck():
+async def test_create_plan_empty_deck() -> None:
     """An empty deck (card_count=0) should produce a valid plan with 1 card target."""
     deck = _make_deck(card_count=0, name="Empty Deck")
     db = _make_db(deck=deck)
@@ -347,6 +353,7 @@ async def test_create_plan_empty_deck():
         db=db, user=user, deck_id="dck_xyz789", goal=None, days=5, daily_minutes=30, now=now
     )
     assert plan.daily_target >= 1
+    assert isinstance(plan.schedule, list)
     assert len(plan.schedule) == 5
 
 
@@ -354,7 +361,7 @@ async def test_create_plan_empty_deck():
 
 
 @pytest.mark.asyncio
-async def test_get_active_plan_raises_when_none():
+async def test_get_active_plan_raises_when_none() -> None:
     """get_active_plan must raise PlanNotFoundError when no plan exists."""
     db = AsyncMock()
     result = MagicMock()
@@ -366,7 +373,7 @@ async def test_get_active_plan_raises_when_none():
 
 
 @pytest.mark.asyncio
-async def test_get_active_plan_returns_plan():
+async def test_get_active_plan_returns_plan() -> None:
     """get_active_plan returns the plan when one exists."""
     plan = StudyPlan(
         id="pln_test",

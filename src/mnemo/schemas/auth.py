@@ -50,3 +50,19 @@ class TokenResponse(BaseModel):
             }
         }
     }
+
+
+class LoginRequest(BaseModel):
+    """Request body for POST /v1/auth/login (password-based login)."""
+
+    display_name: str = Field(..., min_length=3, description="User display name")
+    password: str = Field(..., min_length=8, description="User password")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "display_name": "Enow Sinke",
+                "password": "securePass123",
+            }
+        }
+    }

@@ -10,7 +10,7 @@ from mnemo.models.user import User
 
 
 @pytest.mark.asyncio
-async def test_admin_can_access_other_user(monkeypatch):
+async def test_admin_can_access_other_user(monkeypatch: pytest.MonkeyPatch) -> None:
     # Create a target user to be returned by user_service.get_user_by_id
     target = User(
         id="usr_a1b2c3d4e5f6a7b8",
@@ -62,7 +62,7 @@ async def test_admin_can_access_other_user(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_non_admin_cannot_access_other_user(monkeypatch):
+async def test_non_admin_cannot_access_other_user(monkeypatch: pytest.MonkeyPatch) -> None:
     target = User(
         id="usr_b1b2c3d4e5f6a7b8",
         display_name="Target 2",

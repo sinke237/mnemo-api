@@ -1,6 +1,7 @@
 import importlib
 import logging
 import sys
+from collections.abc import Generator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -9,7 +10,7 @@ from tests.helpers.fake_redis import FakeRedis
 
 
 @pytest.fixture(autouse=True)
-def reset_settings_after_test():
+def reset_settings_after_test() -> Generator[None, None, None]:
     """Reset Redis client and settings cache after each test.
 
     Reset `redis_mod._redis_client` and `get_settings.cache_clear()` then
@@ -37,7 +38,7 @@ def reset_settings_after_test():
 
 
 @pytest.mark.asyncio
-async def test_sessions_get_uses_read_limit(monkeypatch):
+async def test_sessions_get_uses_read_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeRedis()
     import mnemo.db.redis as redis_mod
 
@@ -71,7 +72,7 @@ async def test_sessions_get_uses_read_limit(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_sessions_post_uses_answer_limit(monkeypatch):
+async def test_sessions_post_uses_answer_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeRedis()
     import mnemo.db.redis as redis_mod
 

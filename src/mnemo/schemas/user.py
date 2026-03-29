@@ -11,6 +11,126 @@ from pydantic import BaseModel, Field, computed_field, field_validator
 from mnemo.core.constants import DEFAULT_DAILY_GOAL_CARDS, EducationLevel
 from mnemo.utils.local_time import to_local_time
 
+# ── Self-service / admin provision schemas ────────────────────────────────────
+
+
+class UserProvisionRequest(BaseModel):
+    """Request body for POST /v1/user/provision (public self-registration)."""
+
+    display_name: str | None = Field(
+        None, max_length=100, description="Display name (must be unique if provided)"
+    )
+    country: str = Field(
+        ...,
+        description="ISO 3166-1 alpha-2 country code",
+        pattern=r"^[A-Za-z]{2}$",
+        examples=["CM", "US", "GB"],
+    )
+    timezone: str | None = Field(
+        None,
+        description="IANA timezone. Required for multi-timezone countries; inferred otherwise.",
+        examples=["Africa/Douala", "America/New_York"],
+    )
+    password: str | None = Field(
+        None,
+        min_length=8,
+        max_length=72,
+        description="Password (min 8 chars). If omitted the account is passwordless; "
+        "login requires an API key.",
+    )
+
+    @field_validator("country")
+    @classmethod
+    def validate_country_uppercase(cls, v: str) -> str:
+        return v.upper()
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "display_name": "Enow Sinke",
+                "country": "CM",
+                "password": "securePass123",
+            }
+        }
+    }
+
+
+class AdminProvisionRequest(UserProvisionRequest):
+    """Request body for POST /v1/admin/provision (admin-only user creation).
+
+    Extends UserProvisionRequest with an optional role field — only an admin
+    may create another admin.
+    """
+
+    role: str | None = Field(
+        None,
+        description="User role. Defaults to 'user'. Set to 'admin' to create an admin account.",
+        examples=["user", "admin"],
+    )
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str | None) -> str | None:
+        if v is not None and v not in ("user", "admin"):
+            raise ValueError("role must be 'user' or 'admin'")
+        return v
+
+
+class ProvisionResponse(BaseModel):
+    """Response body for POST /v1/user/provision and POST /v1/admin/provision."""
+
+    user_id: str = Field(..., description="Newly created user ID")
+    api_key: str = Field(..., description="Plain API key — shown ONCE, store it immediately")
+    display_name: str | None = Field(None, description="Display name")
+    role: str = Field(..., description="User role ('user' or 'admin')")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "user_id": "usr_a1b2c3d4e5f6g7h8",
+                "api_key": "mnm_test_abcdef1234567890abcdef1234567890abcdef12345678",
+                "display_name": "Enow Sinke",
+                "role": "user",
+            }
+        }
+    }
+
+
+# ── Admin user-list schemas ───────────────────────────────────────────────────
+
+
+class UserListItem(BaseModel):
+    """Single user entry in the admin user list."""
+
+    user_id: str
+    display_name: str | None
+    country: str
+    role: str
+    created_at: datetime
+    deck_count: int
+    has_granted_admin_access: bool
+
+    model_config = {"from_attributes": True}
+
+
+class UserListResponse(BaseModel):
+    """Paginated response for GET /v1/admin/users."""
+
+    users: list[UserListItem]
+    total: int
+    page: int
+    per_page: int
+
+
+# ── Admin-access consent schemas ──────────────────────────────────────────────
+
+
+class GrantAdminAccessResponse(BaseModel):
+    """Response for POST /v1/user/grant-admin-access."""
+
+    admin_access_granted: bool
+    granted_at: datetime | None = None
+
 
 class UserCreate(BaseModel):
     """Request body for POST /v1/users (create user)"""
