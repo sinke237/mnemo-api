@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mnemo.core.constants import PermissionScope
 from mnemo.main import app
 from mnemo.models.user import User
-from mnemo.schemas.user import UserCreate
+from mnemo.schemas.user import UserProvisionRequest as UserCreate
 from mnemo.services.api_key import create_api_key
 from mnemo.services.user import create_user
 
@@ -28,6 +28,8 @@ from mnemo.services.user import create_user
 async def admin_user_with_key(db_session: AsyncSession) -> tuple[User, str]:
     """Admin user (created via create_user, API key with ADMIN scope)."""
     user_data = UserCreate(
+        email="admin@example.com",
+        password="securePass123",
         display_name="AdminActor",
         country="CM",
         timezone="Africa/Douala",
@@ -53,6 +55,8 @@ async def admin_user_with_key(db_session: AsyncSession) -> tuple[User, str]:
 async def regular_user_with_key(db_session: AsyncSession) -> tuple[User, str]:
     """Regular (non-admin) user."""
     user_data = UserCreate(
+        email="regular@example.com",
+        password="securePass123",
         display_name="RegularJoe",
         country="GB",
         locale="en-GB",
@@ -97,7 +101,12 @@ async def test_admin_provision_user(
 
         resp = await client.post(
             "/v1/admin/provision",
-            json={"display_name": "NewUser", "country": "CM"},
+            json={
+                "email": "newuser@example.com",
+                "password": "securePass1",
+                "display_name": "NewUser",
+                "country": "CM",
+            },
             headers={"Authorization": f"Bearer {jwt}"},
         )
     assert resp.status_code == 201, resp.text
@@ -119,7 +128,13 @@ async def test_admin_provision_admin_role(
 
         resp = await client.post(
             "/v1/admin/provision",
-            json={"display_name": "SuperAdmin", "country": "CM", "role": "admin"},
+            json={
+                "email": "superadmin@example.com",
+                "password": "securePass1",
+                "display_name": "SuperAdmin",
+                "country": "CM",
+                "role": "admin",
+            },
             headers={"Authorization": f"Bearer {jwt}"},
         )
     assert resp.status_code == 201, resp.text
@@ -137,7 +152,12 @@ async def test_non_admin_provision_returns_403(
 
         resp = await client.post(
             "/v1/admin/provision",
-            json={"country": "GB"},
+            json={
+                "email": "nonadmin-test@example.com",
+                "password": "securePass1",
+                "display_name": "Non Admin Test",
+                "country": "GB",
+            },
             headers={"Authorization": f"Bearer {jwt}"},
         )
     assert resp.status_code == 403
@@ -154,14 +174,24 @@ async def test_admin_provision_duplicate_name_returns_409(
 
         r1 = await client.post(
             "/v1/admin/provision",
-            json={"display_name": "Dupe", "country": "CM"},
+            json={
+                "email": "dupe1@example.com",
+                "password": "securePass1",
+                "display_name": "Dupe",
+                "country": "CM",
+            },
             headers={"Authorization": f"Bearer {jwt}"},
         )
         assert r1.status_code == 201
 
         r2 = await client.post(
             "/v1/admin/provision",
-            json={"display_name": "Dupe", "country": "CM"},
+            json={
+                "email": "dupe2@example.com",
+                "password": "securePass2",
+                "display_name": "Dupe",
+                "country": "CM",
+            },
             headers={"Authorization": f"Bearer {jwt}"},
         )
     assert r2.status_code == 409
@@ -214,7 +244,12 @@ async def test_admin_list_users_search(
         # Provision an extra user with a distinctive name
         await client.post(
             "/v1/admin/provision",
-            json={"display_name": "UniqueSearchTarget", "country": "CM"},
+            json={
+                "email": "searchme@example.com",
+                "password": "securePass1",
+                "display_name": "UniqueSearchTarget",
+                "country": "CM",
+            },
             headers={"Authorization": f"Bearer {jwt}"},
         )
 
@@ -238,10 +273,15 @@ async def test_admin_list_users_pagination(
         jwt = await _get_jwt(client, admin.id, admin_key)
 
         # Create two more users
-        for name in ("PaginationA", "PaginationB"):
+        for idx, name in enumerate(("PaginationA", "PaginationB")):
             await client.post(
                 "/v1/admin/provision",
-                json={"display_name": name, "country": "CM"},
+                json={
+                    "email": f"page{idx}@example.com",
+                    "password": "securePass1",
+                    "display_name": name,
+                    "country": "CM",
+                },
                 headers={"Authorization": f"Bearer {jwt}"},
             )
 
@@ -272,7 +312,12 @@ async def test_admin_delete_user(
         # Provision a target user
         prov = await client.post(
             "/v1/admin/provision",
-            json={"display_name": "ToDelete", "country": "CM"},
+            json={
+                "email": "todelete@example.com",
+                "password": "securePass1",
+                "display_name": "ToDelete",
+                "country": "CM",
+            },
             headers={"Authorization": f"Bearer {jwt}"},
         )
         assert prov.status_code == 201
@@ -296,7 +341,12 @@ async def test_admin_delete_user_removes_from_list(
 
         prov = await client.post(
             "/v1/admin/provision",
-            json={"display_name": "GoneUser", "country": "CM"},
+            json={
+                "email": "goneuser@example.com",
+                "password": "securePass1",
+                "display_name": "GoneUser",
+                "country": "CM",
+            },
             headers={"Authorization": f"Bearer {jwt}"},
         )
         target_id = prov.json()["user_id"]
@@ -361,7 +411,12 @@ async def test_admin_get_user_decks_403_when_not_granted(
         # Provision a target user (admin_access_granted defaults to False)
         prov = await client.post(
             "/v1/admin/provision",
-            json={"display_name": "NoConsent", "country": "CM"},
+            json={
+                "email": "noconsent@example.com",
+                "password": "securePass1",
+                "display_name": "NoConsent",
+                "country": "CM",
+            },
             headers={"Authorization": f"Bearer {admin_jwt}"},
         )
         target_id = prov.json()["user_id"]
@@ -386,7 +441,12 @@ async def test_admin_get_user_decks_200_after_grant(
         # Provision the target user with a password so they can log in
         prov = await client.post(
             "/v1/admin/provision",
-            json={"display_name": "ConsentUser", "country": "CM", "password": "password99"},
+            json={
+                "email": "consent@example.com",
+                "password": "Password99",
+                "display_name": "ConsentUser",
+                "country": "CM",
+            },
             headers={"Authorization": f"Bearer {admin_jwt}"},
         )
         assert prov.status_code == 201
@@ -440,7 +500,12 @@ async def test_grant_admin_access_toggle(db_session: AsyncSession) -> None:
         # Self-register a user with a password
         prov = await client.post(
             "/v1/user/provision",
-            json={"display_name": "ToggleUser", "country": "CM", "password": "pass1234"},
+            json={
+                "email": "toggle@example.com",
+                "display_name": "ToggleUser",
+                "country": "CM",
+                "password": "Pass12345",
+            },
         )
         assert prov.status_code == 201
         user_id = prov.json()["user_id"]

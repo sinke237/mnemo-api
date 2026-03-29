@@ -29,12 +29,41 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
-    context.configure(
-        url=url,
-        target_metadata=target_metadata,
-        literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
-    )
+    # Try to enable literal_binds for nicer SQL output when possible.
+    # Some environments (or Alembic/SQLAlchemy versions) raise an error
+    # if `literal_binds` is provided without `as_sql` mode; in those
+    # cases fall back to configuring without `literal_binds`.
+    try:
+        context.configure(
+            url=url,
+            target_metadata=target_metadata,
+            literal_binds=True,
+            dialect_opts={"paramstyle": "named"},
+        )
+    except Exception as exc:  # pragma: no cover - defense for CI/environments
+        msg = str(exc)
+        # Log that we are falling back to a safer configuration so callers
+        # have observability into why `literal_binds` couldn't be used.
+        try:
+            ctx_logger = context.get_context_logger()
+            ctx_logger.warning(
+                "run_migrations_offline: falling back to configure() without literal_binds - reason=%s, url=%s, target_metadata_present=%s",
+                msg,
+                url,
+                bool(target_metadata),
+            )
+        except Exception:
+            # If the alembic context logger isn't available or logging fails,
+            # don't let it block the fallback path.
+            pass
+        if "literal_binds" in msg or "as_sql" in msg:
+            context.configure(
+                url=url,
+                target_metadata=target_metadata,
+                dialect_opts={"paramstyle": "named"},
+            )
+        else:
+            raise
     with context.begin_transaction():
         context.run_migrations()
 

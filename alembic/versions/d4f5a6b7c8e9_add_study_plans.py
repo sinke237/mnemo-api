@@ -1,6 +1,6 @@
 """Add study_plans table
 
-Revision ID: d1e2f3a4b5c6
+Revision ID: d4f5a6b7c8e9
 Revises: b3c4d5e6f7a8
 Create Date: 2026-03-21 00:00:00.000000
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "d1e2f3a4b5c6"
+revision: str = "d4f5a6b7c8e9"
 down_revision: str | Sequence[str] | None = "b3c4d5e6f7a8"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

@@ -15,11 +15,11 @@ from sqlalchemy import delete, select
 from mnemo.core.constants import PermissionScope
 from mnemo.db.database import AsyncSessionLocal
 from mnemo.models.user import User
-from mnemo.schemas.user import UserCreate
+from mnemo.schemas.user import UserProvisionRequest
 from mnemo.services import deck as deck_service
 from mnemo.services import flashcard as flashcard_service
 from mnemo.services.api_key import create_api_key
-from mnemo.services.user import create_user
+from mnemo.services.user import provision_user
 
 SEED_DISPLAY_NAMES = ["Seed Admin", "Seed User 1", "Seed User 2"]
 SEED_DOC_PATH = Path("dev_docs/seed_data.md")
@@ -41,70 +41,42 @@ async def _seed_users_exist() -> bool:
 
 async def _seed_data() -> dict[str, str]:
     async with AsyncSessionLocal() as session:
-        admin = await create_user(
-            session,
-            UserCreate(
-                display_name="Seed Admin",
-                country="US",
-                timezone="America/New_York",
-                locale="en-US",
-                preferred_language="en",
-                daily_goal_cards=20,
-            ),
-        )
-        user1 = await create_user(
-            session,
-            UserCreate(
-                display_name="Seed User 1",
-                country="CM",
-                timezone="Africa/Douala",
-                locale="fr-CM",
-                preferred_language="fr",
-                daily_goal_cards=25,
-            ),
-        )
-        user2 = await create_user(
-            session,
-            UserCreate(
-                display_name="Seed User 2",
-                country="GB",
-                timezone="Europe/London",
-                locale="en-GB",
-                preferred_language="en",
-                daily_goal_cards=30,
-            ),
-        )
-
-        _, admin_key = await create_api_key(
+        admin, admin_key, _ = await provision_user(
             db=session,
-            user_id=admin.id,
-            name="Seed Admin Live API Key",
-            is_live=True,
-            scopes=[PermissionScope.ADMIN],
+            email="seed_admin@example.com",
+            password="Password123",
+            display_name="Seed Admin",
+            country="US",
+            timezone="America/New_York",
+            locale="en-US",
+            preferred_language="en",
+            daily_goal_cards=20,
+            role="admin",
+            create_live_key=True,
         )
-        _, user1_key = await create_api_key(
+        user1, user1_key, _ = await provision_user(
             db=session,
-            user_id=user1.id,
-            name="Seed API Key 1",
-            is_live=False,
-            scopes=[
-                PermissionScope.DECKS_READ,
-                PermissionScope.DECKS_WRITE,
-                PermissionScope.SESSIONS_RUN,
-                PermissionScope.PROGRESS_READ,
-            ],
+            email="seed_user1@example.com",
+            password="Password123",
+            display_name="Seed User 1",
+            country="CM",
+            timezone="Africa/Douala",
+            locale="fr-CM",
+            preferred_language="fr",
+            daily_goal_cards=25,
+            create_live_key=False,
         )
-        _, user2_key = await create_api_key(
+        user2, user2_key, _ = await provision_user(
             db=session,
-            user_id=user2.id,
-            name="Seed API Key 2",
-            is_live=False,
-            scopes=[
-                PermissionScope.DECKS_READ,
-                PermissionScope.DECKS_WRITE,
-                PermissionScope.SESSIONS_RUN,
-                PermissionScope.PROGRESS_READ,
-            ],
+            email="seed_user2@example.com",
+            password="Password123",
+            display_name="Seed User 2",
+            country="GB",
+            timezone="Europe/London",
+            locale="en-GB",
+            preferred_language="en",
+            daily_goal_cards=30,
+            create_live_key=False,
         )
 
         deck1 = await deck_service.create_deck(

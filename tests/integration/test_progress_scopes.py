@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.core.constants import PermissionScope
 from mnemo.main import app
-from mnemo.schemas.user import UserCreate
+from mnemo.schemas.user import UserProvisionRequest as UserCreate
 from mnemo.services.api_key import create_api_key
 from mnemo.services.deck import create_deck
 from mnemo.services.user import create_user
@@ -16,6 +16,8 @@ from mnemo.services.user import create_user
 async def test_progress_endpoints_require_scope(db_session: AsyncSession) -> None:
     # Create a user
     user_data = UserCreate(
+        email="scope-test@example.com",
+        password="securePass123",
         display_name="Scope Test",
         country="US",
         timezone="America/New_York",

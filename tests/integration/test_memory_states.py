@@ -24,6 +24,8 @@ async def user_with_timezone(db: AsyncSession) -> User:
     """Fixture for a user with a specific timezone."""
     user = User(
         id="usr_timezone_test",
+        email="tz-test@example.com",
+        normalized_email="tz-test@example.com",
         country="CM",  # Cameroon
         timezone="Africa/Douala",  # UTC+1
         display_name="Timezone Tester",

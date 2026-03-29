@@ -7,6 +7,7 @@ from fastapi import APIRouter
 
 from mnemo.api.v1.routes import (
     admin,
+    api_keys,
     auth,
     cards,
     countries,
@@ -14,6 +15,7 @@ from mnemo.api.v1.routes import (
     health,
     imports,
     memory_states,
+    password,
     plan,
     progress,
     provision,
@@ -25,8 +27,10 @@ router = APIRouter(prefix="/v1")
 router.include_router(health.router)
 router.include_router(auth.router)
 router.include_router(provision.router)
+router.include_router(api_keys.router)
 router.include_router(admin.router)
 router.include_router(users.router)
+router.include_router(password.router)
 router.include_router(countries.router)
 router.include_router(imports.router)
 router.include_router(decks.router)

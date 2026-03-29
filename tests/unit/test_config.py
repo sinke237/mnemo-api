@@ -26,6 +26,7 @@ def test_is_production_property() -> None:
     s = Settings(
         app_env="production",
         api_key_secret="1234567890123456789012345678901234567890",
+        password_reset_secret="0123456789012345678901234567890123456789",
     )
     assert s.is_production is True
     assert s.is_development is False

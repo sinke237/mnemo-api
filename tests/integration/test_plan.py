@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mnemo.core.constants import ErrorCode, PermissionScope
 from mnemo.main import app
 from mnemo.models.user import User
-from mnemo.schemas.user import UserCreate
+from mnemo.schemas.user import UserProvisionRequest
 from mnemo.services.api_key import create_api_key
 from mnemo.services.deck import create_deck
 from mnemo.services.user import create_user
@@ -43,7 +43,9 @@ async def _make_user_with_key(
     scopes: list[PermissionScope],
 ) -> tuple[User, str]:
     """Create a user + API key, return (user, plain_api_key)."""
-    user_data = UserCreate(
+    user_data = UserProvisionRequest(
+        email=f"plantester_{uuid.uuid4().hex[:8]}@example.com",
+        password="securePass123",
         display_name=f"PlanTester_{uuid.uuid4().hex[:8]}",
         country=country,
         timezone=timezone,

@@ -14,6 +14,9 @@ async def test_admin_can_access_other_user(monkeypatch: pytest.MonkeyPatch) -> N
     # Create a target user to be returned by user_service.get_user_by_id
     target = User(
         id="usr_a1b2c3d4e5f6a7b8",
+        email="target@example.com",
+        normalized_email="target@example.com",
+        email_verified=False,
         display_name="Target User",
         country="US",
         locale="en-US",
@@ -21,6 +24,7 @@ async def test_admin_can_access_other_user(monkeypatch: pytest.MonkeyPatch) -> N
         education_level=None,
         preferred_language="en",
         daily_goal_cards=20,
+        role="user",
     )
     # Provide required audit fields expected by UserResponse
 
@@ -29,6 +33,9 @@ async def test_admin_can_access_other_user(monkeypatch: pytest.MonkeyPatch) -> N
     # Create a current (admin) user
     admin_user = User(
         id="usr_deadbeefcafebabe",
+        email="admin@example.com",
+        normalized_email="admin@example.com",
+        email_verified=False,
         display_name="Admin",
         country="US",
         locale="en-US",
@@ -36,6 +43,7 @@ async def test_admin_can_access_other_user(monkeypatch: pytest.MonkeyPatch) -> N
         education_level=None,
         preferred_language="en",
         daily_goal_cards=20,
+        role="admin",
     )
     # Attach token_scopes indicating admin
     admin_user.token_scopes = [PermissionScope.ADMIN.value]
@@ -65,6 +73,9 @@ async def test_admin_can_access_other_user(monkeypatch: pytest.MonkeyPatch) -> N
 async def test_non_admin_cannot_access_other_user(monkeypatch: pytest.MonkeyPatch) -> None:
     target = User(
         id="usr_b1b2c3d4e5f6a7b8",
+        email="target2@example.com",
+        normalized_email="target2@example.com",
+        email_verified=False,
         display_name="Target 2",
         country="US",
         locale="en-US",
@@ -72,6 +83,7 @@ async def test_non_admin_cannot_access_other_user(monkeypatch: pytest.MonkeyPatc
         education_level=None,
         preferred_language="en",
         daily_goal_cards=20,
+        role="user",
     )
     # Provide required audit fields expected by UserResponse
 
@@ -80,6 +92,9 @@ async def test_non_admin_cannot_access_other_user(monkeypatch: pytest.MonkeyPatc
     # Non-admin current user
     user = User(
         id="usr_feedfacecafef00d",
+        email="normal@example.com",
+        normalized_email="normal@example.com",
+        email_verified=False,
         display_name="Normal",
         country="US",
         locale="en-US",
@@ -87,6 +102,7 @@ async def test_non_admin_cannot_access_other_user(monkeypatch: pytest.MonkeyPatc
         education_level=None,
         preferred_language="en",
         daily_goal_cards=20,
+        role="user",
     )
     user.token_scopes = []
 

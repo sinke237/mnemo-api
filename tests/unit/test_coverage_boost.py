@@ -58,6 +58,7 @@ def test_settings_jwt_validator_and_env_props() -> None:
     s = Settings(
         app_env="production",
         api_key_secret="1234567890123456789012345678901234567890",
+        password_reset_secret="0123456789012345678901234567890123456789",
     )
     assert s.is_production
     assert not s.is_development

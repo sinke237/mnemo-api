@@ -10,6 +10,7 @@ from .session import Session
 from .session_card import SessionCard
 from .study_plan import StudyPlan
 from .user import User
+from .user_admin_consent import UserAdminConsent
 
 __all__ = [
     "APIKey",
@@ -20,6 +21,7 @@ __all__ = [
     "ImportJob",
     "StudyPlan",
     "User",
+    "UserAdminConsent",
     "Session",
     "SessionCard",
 ]

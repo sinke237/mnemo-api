@@ -24,3 +24,11 @@ def get_password_hash(password: str) -> str:
     Hash a plaintext password with bcrypt and return the hash as a UTF-8 string.
     """
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+# A dummy bcrypt hash used to equalize authentication timing when a user
+# record does not exist or has no password. Generated at import time so it's
+# a valid bcrypt-formatted hash compatible with `verify_password`.
+DUMMY_PASSWORD_HASH: str = bcrypt.hashpw(b"dummy_password_for_timing", bcrypt.gensalt()).decode(
+    "utf-8"
+)

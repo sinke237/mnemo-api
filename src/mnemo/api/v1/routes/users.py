@@ -12,6 +12,8 @@ from mnemo.api.dependencies import (
 )
 from mnemo.core.constants import ErrorCode, PermissionScope
 from mnemo.core.exceptions import (
+    DisplayNameConflictError,
+    EmailConflictError,
     InvalidCountryCodeError,
     InvalidTimezoneError,
     MissingTimezoneError,
@@ -20,7 +22,12 @@ from mnemo.core.exceptions import (
 from mnemo.db.database import get_db
 from mnemo.models.user import User
 from mnemo.schemas.error import ErrorResponse
-from mnemo.schemas.user import UserCreate, UserResponse, UserUpdate
+from mnemo.schemas.user import (
+    ProvisionResponse,
+    UserProvisionRequest,
+    UserResponse,
+    UserUpdate,
+)
 from mnemo.services import user as user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -51,6 +58,7 @@ def _user_not_found(user_id: str) -> HTTPException:
         400: {"model": ErrorResponse, "description": "Invalid country code or timezone"},
         401: {"model": ErrorResponse, "description": "Invalid API key"},
         403: {"model": ErrorResponse, "description": "Insufficient scope (requires admin)"},
+        409: {"model": ErrorResponse, "description": "Email or display name conflict"},
     },
     summary="Create a new user",
     description=(
@@ -61,9 +69,9 @@ def _user_not_found(user_id: str) -> HTTPException:
     ),
 )
 async def create_user(
-    user_data: UserCreate,
+    user_data: UserProvisionRequest,
     db: AsyncSession = db_dep,
-) -> UserResponse:
+) -> UserResponse | ProvisionResponse:
     """
     Create a new user account.
 
@@ -73,7 +81,37 @@ async def create_user(
     - Location is never auto-detected
     """
     try:
-        user = await user_service.create_user(db, user_data)
+        user, _plain_api_key, _key_type = await user_service.provision_user(
+            db=db,
+            email=user_data.email,
+            password=user_data.password,
+            country=user_data.country,
+            timezone=user_data.timezone,
+            display_name=user_data.display_name,
+            role=user_data.role or "user",
+            create_live_key=user_data.create_live_key,
+            preferred_language=user_data.preferred_language,
+            daily_goal_cards=user_data.daily_goal_cards,
+        )
+
+        # `user_service.provision_user` returns a plain API key as the
+        # second tuple element when `create_live_key` is True. If the caller
+        # requested creation of a live key, return the `ProvisionResponse`
+        # which includes the one-time plaintext API key. Do NOT log or persist
+        # the plaintext key anywhere else.
+        if user_data.create_live_key:
+            return ProvisionResponse.model_validate(
+                {
+                    "user_id": user.id,
+                    "email": user.email,
+                    "api_key": _plain_api_key,
+                    "key_type": _key_type,
+                    "display_name": user.display_name,
+                    "role": user.role,
+                    "email_verified": user.email_verified,
+                }
+            )
+
         return UserResponse.model_validate(user)
 
     except InvalidCountryCodeError as e:
@@ -96,6 +134,28 @@ async def create_user(
                     "code": ErrorCode.INVALID_TIMEZONE.value,
                     "message": str(e),
                     "status": 400,
+                }
+            },
+        ) from e
+    except EmailConflictError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": {
+                    "code": ErrorCode.EMAIL_CONFLICT.value,
+                    "message": str(e),
+                    "status": 409,
+                }
+            },
+        ) from e
+    except DisplayNameConflictError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": {
+                    "code": ErrorCode.DISPLAY_NAME_CONFLICT.value,
+                    "message": str(e),
+                    "status": 409,
                 }
             },
         ) from e
@@ -156,6 +216,7 @@ async def get_user(
         400: {"model": ErrorResponse, "description": "Invalid timezone"},
         401: {"model": ErrorResponse, "description": "Invalid or expired token"},
         403: {"model": ErrorResponse, "description": "Forbidden"},
+        409: {"model": ErrorResponse, "description": "Email or display name conflict"},
         404: {"model": ErrorResponse, "description": "User not found"},
     },
     summary="Update user profile",

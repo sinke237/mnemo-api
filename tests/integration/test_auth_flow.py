@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mnemo.core.constants import PermissionScope
 from mnemo.main import app
 from mnemo.models.user import User
-from mnemo.schemas.user import UserCreate
+from mnemo.schemas.user import UserProvisionRequest as UserCreate
 from mnemo.services.api_key import create_api_key
 from mnemo.services.auth import create_access_token
 from mnemo.services.user import create_user
@@ -31,6 +31,8 @@ async def admin_user_with_key(db_session: AsyncSession) -> tuple[User, str]:
     """Create an admin user with an API key for testing."""
     # Create user
     user_data = UserCreate(
+        email="test-admin@example.com",
+        password="securePass123",
         display_name="Test Admin",
         country="CM",
         timezone="Africa/Douala",
@@ -59,6 +61,8 @@ async def regular_user_with_key(db_session: AsyncSession) -> tuple[User, str]:
     """Create a regular user with standard scopes for testing."""
     # Create user
     user_data = UserCreate(
+        email="regular-user@example.com",
+        password="securePass123",
         display_name="Regular User",
         country="US",
         timezone="America/New_York",
@@ -299,6 +303,8 @@ async def test_multi_timezone_country_requires_timezone(
             "/v1/users",
             headers={"X-API-Key": admin_key},
             json={
+                "email": "ususer@example.com",
+                "password": "securePass123",
                 "display_name": "US User",
                 "country": "US",
                 "preferred_language": "en",
