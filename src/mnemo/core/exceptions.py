@@ -48,6 +48,12 @@ class DisplayNameConflictError(UserError):
     pass
 
 
+class EmailConflictError(UserError):
+    """Raised when attempting to register with an email that's already taken."""
+
+    pass
+
+
 # ── API Key Exceptions ─────────────────────────────────────────────────────────
 
 

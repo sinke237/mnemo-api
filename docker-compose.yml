@@ -90,7 +90,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: python -m alembic upgrade head
+    command: python -m alembic upgrade heads
 
   worker:
     build:

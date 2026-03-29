@@ -63,6 +63,8 @@ async def db(create_test_database) -> AsyncGenerator[AsyncSession, None]:
 def authenticated_user() -> User:
     user = User(
         id="usr_b2c3d4e5f6a7b8a1",
+        email="testuser@example.com",
+        normalized_email="testuser@example.com",
         country="US",
         timezone="America/New_York",
         display_name="Test User",

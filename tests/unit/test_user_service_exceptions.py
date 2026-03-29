@@ -14,7 +14,7 @@ from mnemo.core.exceptions import (
     TimezoneNotAllowedError,
 )
 from mnemo.db.database import AsyncSessionLocal, engine
-from mnemo.schemas.user import UserCreate, UserUpdate
+from mnemo.schemas.user import UserProvisionRequest, UserUpdate
 from mnemo.services.user import create_user, update_user
 
 
@@ -35,7 +35,9 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 @pytest.mark.asyncio
 async def test_create_user_invalid_country_raises_error(db_session: AsyncSession) -> None:
     """Test that invalid country code raises InvalidCountryCodeError."""
-    user_data = UserCreate(
+    user_data = UserProvisionRequest(
+        email="test-zz@example.com",
+        password="securePass123",
         display_name="Test User",
         country="ZZ",  # Invalid country
         preferred_language="en",
@@ -51,7 +53,9 @@ async def test_create_user_invalid_country_raises_error(db_session: AsyncSession
 @pytest.mark.asyncio
 async def test_create_user_derives_timezone_cm(db_session: AsyncSession) -> None:
     """Test that CM derives Africa/Douala when timezone is omitted."""
-    user_data = UserCreate(
+    user_data = UserProvisionRequest(
+        email="test-cm@example.com",
+        password="securePass123",
         display_name="Test User",
         country="CM",
         preferred_language="en",
@@ -65,7 +69,9 @@ async def test_create_user_derives_timezone_cm(db_session: AsyncSession) -> None
 @pytest.mark.asyncio
 async def test_create_user_derives_timezone_ng(db_session: AsyncSession) -> None:
     """Test that NG derives Africa/Lagos when timezone is omitted."""
-    user_data = UserCreate(
+    user_data = UserProvisionRequest(
+        email="test-ng@example.com",
+        password="securePass123",
         display_name="Test User",
         country="NG",
         preferred_language="en",
@@ -78,28 +84,34 @@ async def test_create_user_derives_timezone_ng(db_session: AsyncSession) -> None
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "user_data_kwargs",
+    "user_data_kwargs,email",
     [
-        {
-            "display_name": "US User",
-            "country": "US",
-            "preferred_language": "en",
-            "daily_goal_cards": 20,
-        },  # Omitted
-        {
-            "display_name": "US User",
-            "country": "US",
-            "preferred_language": "en",
-            "daily_goal_cards": 20,
-            "timezone": None,
-        },  # Explicitly None
+        (
+            {
+                "display_name": "US User",
+                "country": "US",
+                "preferred_language": "en",
+                "daily_goal_cards": 20,
+            },
+            "test-us-missingtz-omitted@example.com",
+        ),  # Omitted
+        (
+            {
+                "display_name": "US User",
+                "country": "US",
+                "preferred_language": "en",
+                "daily_goal_cards": 20,
+                "timezone": None,
+            },
+            "test-us-missingtz-explicitnone@example.com",
+        ),  # Explicitly None
     ],
 )
 async def test_create_user_multi_tz_missing_timezone_raises_error(
-    db_session: AsyncSession, user_data_kwargs: dict
+    db_session: AsyncSession, user_data_kwargs: dict, email: str
 ) -> None:
     """Test that multi-timezone country without timezone raises MissingTimezoneError."""
-    user_data = UserCreate(**user_data_kwargs)
+    user_data = UserProvisionRequest(**user_data_kwargs, email=email, password="securePass123")
 
     with pytest.raises(MissingTimezoneError) as exc_info:
         await create_user(db_session, user_data)
@@ -110,7 +122,9 @@ async def test_create_user_multi_tz_missing_timezone_raises_error(
 @pytest.mark.asyncio
 async def test_create_user_invalid_timezone_raises_error(db_session: AsyncSession) -> None:
     """Test that invalid timezone raises InvalidTimezoneError."""
-    user_data = UserCreate(
+    user_data = UserProvisionRequest(
+        email="test-invalidtz@example.com",
+        password="securePass123",
         display_name="Test User",
         country="GB",
         timezone="Invalid/Timezone",  # Invalid IANA timezone
@@ -129,7 +143,9 @@ async def test_create_user_wrong_timezone_for_country_raises_error(
     db_session: AsyncSession,
 ) -> None:
     """Test that wrong timezone for country raises InvalidTimezoneError."""
-    user_data = UserCreate(
+    user_data = UserProvisionRequest(
+        email="test-wrongtz@example.com",
+        password="securePass123",
         display_name="Test User",
         country="GB",  # Should use Europe/London
         timezone="America/New_York",  # Wrong timezone for GB
@@ -146,7 +162,9 @@ async def test_create_user_wrong_timezone_for_country_raises_error(
 @pytest.mark.asyncio
 async def test_create_user_blank_timezone_raises_error(db_session: AsyncSession) -> None:
     """Test that blank/whitespace timezone raises InvalidTimezoneError."""
-    user_data = UserCreate(
+    user_data = UserProvisionRequest(
+        email="test-blanktz@example.com",
+        password="securePass123",
         display_name="Test User",
         country="GB",
         timezone="   ",  # Whitespace only
@@ -164,7 +182,9 @@ async def test_create_user_blank_timezone_raises_error(db_session: AsyncSession)
 async def test_update_user_invalid_timezone_raises_error(db_session: AsyncSession) -> None:
     """Test that updating with invalid timezone raises InvalidTimezoneError."""
     # First create a valid user
-    user_data = UserCreate(
+    user_data = UserProvisionRequest(
+        email="test-create-update@example.com",
+        password="securePass123",
         display_name="Test User",
         country="US",
         timezone="America/New_York",
@@ -189,7 +209,9 @@ async def test_update_user_timezone_not_allowed_for_single_tz_country(
 ) -> None:
     """Test that changing timezone for single-TZ country raises TimezoneNotAllowedError."""
     # Create user in single-timezone country
-    user_data = UserCreate(
+    user_data = UserProvisionRequest(
+        email="test-single-tz@example.com",
+        password="securePass123",
         display_name="Test User",
         country="GB",  # Single timezone
         preferred_language="en",
@@ -213,7 +235,9 @@ async def test_update_user_wrong_timezone_for_multi_tz_country(
 ) -> None:
     """Test that invalid timezone for multi-TZ country raises InvalidTimezoneError."""
     # Create user in multi-timezone country
-    user_data = UserCreate(
+    user_data = UserProvisionRequest(
+        email="test-ususer@example.com",
+        password="securePass123",
         display_name="US User",
         country="US",
         timezone="America/New_York",
@@ -238,7 +262,9 @@ async def test_update_user_valid_timezone_for_multi_tz_country_succeeds(
 ) -> None:
     """Test that valid timezone change for multi-TZ country succeeds."""
     # Create user in multi-timezone country
-    user_data = UserCreate(
+    user_data = UserProvisionRequest(
+        email="test-us-validtz@example.com",
+        password="securePass123",
         display_name="US User",
         country="US",
         timezone="America/New_York",

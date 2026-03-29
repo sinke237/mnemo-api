@@ -34,6 +34,8 @@ async def user_with_dst_timezone(db: AsyncSession, authenticated_user: User) -> 
 async def user_with_extreme_timezone(db: AsyncSession) -> User:
     user = User(
         id="usr_extreme_tz_tester",
+        email="extreme-tz@example.com",
+        normalized_email="extreme-tz@example.com",
         country="KI",
         timezone="Pacific/Kiritimati",
         display_name="Extreme Timezone Tester",
@@ -47,6 +49,8 @@ async def user_with_extreme_timezone(db: AsyncSession) -> User:
 async def user_with_invalid_timezone(db: AsyncSession) -> User:
     user = User(
         id="usr_b2c3d4e5f6a7b8c9",
+        email="invalid-tz@example.com",
+        normalized_email="invalid-tz@example.com",
         country="AQ",
         timezone="Mars/Olympus_Mons",
         display_name="Invalid Timezone Tester",

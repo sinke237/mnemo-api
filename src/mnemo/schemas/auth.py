@@ -1,15 +1,15 @@
 """
 Authentication schemas.
-Token request/response models per spec section 02: Authentication.
+Token request/response models with email-based login.
 """
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class TokenRequest(BaseModel):
-    """Request body for POST /v1/auth/token"""
+    """Request body for POST /v1/auth/token (API key-based authentication)."""
 
     user_id: str = Field(
         ..., description="User ID (usr_[a-f0-9]{16})", pattern=r"^usr_[a-f0-9]{16}$"
@@ -33,7 +33,7 @@ class TokenRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """Response for successful token generation"""
+    """Response for successful token generation."""
 
     access_token: str = Field(..., description="JWT access token")
     expires_in: int = Field(..., gt=0, description="Token lifetime in seconds")
@@ -53,15 +53,15 @@ class TokenResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """Request body for POST /v1/auth/login (password-based login)."""
+    """Request body for POST /v1/auth/login (email + password login)."""
 
-    display_name: str = Field(..., min_length=3, description="User display name")
-    password: str = Field(..., min_length=8, description="User password")
+    email: EmailStr = Field(..., description="User email address")
+    password: str = Field(..., min_length=8, max_length=128, description="User password")
 
     model_config = {
         "json_schema_extra": {
             "example": {
-                "display_name": "Enow Sinke",
+                "email": "enow.sinke@example.com",
                 "password": "securePass123",
             }
         }

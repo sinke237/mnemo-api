@@ -20,6 +20,7 @@ async def test_provision_user_happy_path(db_session: AsyncSession) -> None:
         resp = await client.post(
             "/v1/user/provision",
             json={
+                "email": "alice@example.com",
                 "display_name": "Alice",
                 "country": "CM",
                 "password": "securePass1",
@@ -37,20 +38,13 @@ async def test_provision_user_happy_path(db_session: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_provision_user_no_password(db_session: AsyncSession) -> None:
-    """Passwordless provision still succeeds; account is created without password_hash."""
+    """Omitting password returns 422 because password is required."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
             "/v1/user/provision",
-            json={"country": "GB"},
+            json={"email": "nopass@example.com", "country": "GB"},
         )
-    assert resp.status_code == 201, resp.text
-    data = resp.json()
-    assert data["role"] == "user"
-    assert data["display_name"] is None
-
-    # Confirm password_hash is not exposed in the response
-    assert "password_hash" not in data
-    assert "password" not in data
+    assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -61,6 +55,7 @@ async def test_provision_user_password_hashing(db_session: AsyncSession) -> None
         resp = await client.post(
             "/v1/user/provision",
             json={
+                "email": "bob@example.com",
                 "display_name": "Bob",
                 "country": "US",
                 "timezone": "America/New_York",
@@ -83,13 +78,23 @@ async def test_provision_user_duplicate_display_name(db_session: AsyncSession) -
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         r1 = await client.post(
             "/v1/user/provision",
-            json={"display_name": "Charlie", "country": "NG"},
+            json={
+                "email": "charlie1@example.com",
+                "password": "securePass1",
+                "display_name": "Charlie",
+                "country": "NG",
+            },
         )
         assert r1.status_code == 201, r1.text
 
         r2 = await client.post(
             "/v1/user/provision",
-            json={"display_name": "Charlie", "country": "CM"},
+            json={
+                "email": "charlie2@example.com",
+                "password": "securePass2",
+                "display_name": "Charlie",
+                "country": "CM",
+            },
         )
     assert r2.status_code == 409
     assert r2.json()["error"]["code"] == "DISPLAY_NAME_CONFLICT"
@@ -101,7 +106,7 @@ async def test_provision_user_invalid_country(db_session: AsyncSession) -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
             "/v1/user/provision",
-            json={"country": "XX"},
+            json={"email": "invalid@example.com", "password": "securePass1", "country": "XX"},
         )
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "INVALID_COUNTRY_CODE"
@@ -115,7 +120,7 @@ async def test_provision_user_missing_timezone_multi_tz_country(
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
             "/v1/user/provision",
-            json={"country": "US"},
+            json={"email": "ususer@example.com", "password": "securePass1", "country": "US"},
         )
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "INVALID_TIMEZONE"
@@ -127,7 +132,7 @@ async def test_provision_user_password_too_short(db_session: AsyncSession) -> No
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
             "/v1/user/provision",
-            json={"country": "CM", "password": "short"},
+            json={"email": "short@example.com", "country": "CM", "password": "short"},
         )
     assert resp.status_code == 422
 
@@ -139,17 +144,22 @@ async def test_provision_user_password_too_short(db_session: AsyncSession) -> No
 async def user_with_password(db_session: AsyncSession) -> tuple[str, str]:
     """Create a user with a known password via the provision endpoint.
 
-    Returns (display_name, password).
+    Returns (email, password).
     """
-    display_name = "LoginUser"
+    email = "loginuser@example.com"
     plain_password = "TestPass99"  # noqa: S105
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
             "/v1/user/provision",
-            json={"display_name": display_name, "country": "CM", "password": plain_password},
+            json={
+                "email": email,
+                "display_name": "LoginUser",
+                "country": "CM",
+                "password": plain_password,
+            },
         )
     assert resp.status_code == 201
-    return display_name, plain_password
+    return email, plain_password
 
 
 @pytest.mark.asyncio
@@ -157,11 +167,11 @@ async def test_login_correct_credentials(
     db_session: AsyncSession, user_with_password: tuple[str, str]
 ) -> None:
     """Correct credentials return a valid JWT (same shape as /v1/auth/token)."""
-    display_name, password = user_with_password
+    email, password = user_with_password
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
             "/v1/auth/login",
-            json={"display_name": display_name, "password": password},
+            json={"email": email, "password": password},
         )
     assert resp.status_code == 200, resp.text
     data = resp.json()
@@ -175,39 +185,23 @@ async def test_login_wrong_password(
     db_session: AsyncSession, user_with_password: tuple[str, str]
 ) -> None:
     """Wrong password returns 401 with INVALID_CREDENTIALS (no user enumeration)."""
-    display_name, _ = user_with_password
+    email, _ = user_with_password
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
             "/v1/auth/login",
-            json={"display_name": display_name, "password": "wrongpassword"},
+            json={"email": email, "password": "wrongpassword1"},
         )
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "INVALID_CREDENTIALS"
 
 
 @pytest.mark.asyncio
-async def test_login_unknown_display_name(db_session: AsyncSession) -> None:
-    """Unknown display_name returns the same 401 as wrong password (no enumeration)."""
+async def test_login_unknown_email_returns_401(db_session: AsyncSession) -> None:
+    """Login with a non-existent email returns 401 (no user enumeration)."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
             "/v1/auth/login",
-            json={"display_name": "nobody_here", "password": "doesntmatter"},
-        )
-    assert resp.status_code == 401
-    assert resp.json()["error"]["code"] == "INVALID_CREDENTIALS"
-
-
-@pytest.mark.asyncio
-async def test_login_passwordless_account_returns_401(db_session: AsyncSession) -> None:
-    """A passwordless account cannot use /v1/auth/login (must use API key instead)."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post(
-            "/v1/user/provision",
-            json={"display_name": "NoPass", "country": "CM"},
-        )
-        resp = await client.post(
-            "/v1/auth/login",
-            json={"display_name": "NoPass", "password": "anypassword"},
+            json={"email": "nonexistent@example.com", "password": "anypassword1"},
         )
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "INVALID_CREDENTIALS"

@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     # Secret used specifically for API key HMAC hashing. Separate from JWT secret
     # so rotating JWT signing keys does not invalidate stored API keys.
     api_key_secret: str = Field(default="dev_apikey_secret_replace_in_production_with_64_char_hex")
+    # Allow creation of live API keys via self-service endpoints when True.
+    allow_live_keys: bool = Field(default=False)
 
     # ── Rate Limiting ──────────────────────────────────────────────────────────
     rate_limit_read_per_minute: int = Field(default=600)

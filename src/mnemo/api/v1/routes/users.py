@@ -12,6 +12,8 @@ from mnemo.api.dependencies import (
 )
 from mnemo.core.constants import ErrorCode, PermissionScope
 from mnemo.core.exceptions import (
+    DisplayNameConflictError,
+    EmailConflictError,
     InvalidCountryCodeError,
     InvalidTimezoneError,
     MissingTimezoneError,
@@ -20,7 +22,7 @@ from mnemo.core.exceptions import (
 from mnemo.db.database import get_db
 from mnemo.models.user import User
 from mnemo.schemas.error import ErrorResponse
-from mnemo.schemas.user import UserCreate, UserResponse, UserUpdate
+from mnemo.schemas.user import UserProvisionRequest, UserResponse, UserUpdate
 from mnemo.services import user as user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -61,7 +63,7 @@ def _user_not_found(user_id: str) -> HTTPException:
     ),
 )
 async def create_user(
-    user_data: UserCreate,
+    user_data: UserProvisionRequest,
     db: AsyncSession = db_dep,
 ) -> UserResponse:
     """
@@ -73,7 +75,27 @@ async def create_user(
     - Location is never auto-detected
     """
     try:
-        user = await user_service.create_user(db, user_data)
+        user, _plain_api_key, _key_type = await user_service.provision_user(
+            db=db,
+            email=user_data.email,
+            password=user_data.password,
+            country=user_data.country,
+            timezone=user_data.timezone,
+            display_name=user_data.display_name,
+            role=user_data.role or "user",
+            create_live_key=user_data.create_live_key,
+        )
+
+        # NOTE: `user_service.provision_user` returns a plain API key as the
+        # second tuple element when `create_live_key` is True (see
+        # `provision_user`, `create_live_key`, and `_plain_api_key`).
+        #
+        # This handler intentionally returns only the `UserResponse` object
+        # (no plain API key) to avoid exposing credentials through this
+        # endpoint. If you want the plain API key to be returned here, swap
+        # to using `ProvisionResponse` (which includes `api_key`) or add
+        # a dedicated endpoint for key delivery. Keeping this comment makes
+        # the behavior explicit so `_plain_api_key` is not silently lost.
         return UserResponse.model_validate(user)
 
     except InvalidCountryCodeError as e:
@@ -96,6 +118,28 @@ async def create_user(
                     "code": ErrorCode.INVALID_TIMEZONE.value,
                     "message": str(e),
                     "status": 400,
+                }
+            },
+        ) from e
+    except EmailConflictError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": {
+                    "code": ErrorCode.EMAIL_CONFLICT.value,
+                    "message": str(e),
+                    "status": 409,
+                }
+            },
+        ) from e
+    except DisplayNameConflictError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": {
+                    "code": ErrorCode.DISPLAY_NAME_CONFLICT.value,
+                    "message": str(e),
+                    "status": 409,
                 }
             },
         ) from e

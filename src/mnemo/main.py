@@ -220,6 +220,14 @@ async def request_validation_exception_handler(
         detail = exc.errors()
     if detail is None:
         detail = getattr(exc, "detail", str(exc))
+    # Sanitize: Pydantic v2 errors() may include non-serializable objects
+    # (e.g. ValueError in ctx). Convert ctx values to strings.
+    if isinstance(detail, list):
+        for err in detail:
+            if isinstance(err, dict):
+                ctx = err.get("ctx")
+                if isinstance(ctx, dict):
+                    err["ctx"] = {k: str(v) for k, v in ctx.items()}
     return _build_response_from_exception(request, exc, status, detail)
 
 

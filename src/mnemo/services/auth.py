@@ -1,7 +1,6 @@
 """
 Authentication service.
-Handles JWT token generation and validation.
-Per spec section 02: Authentication.
+Handles JWT token generation, validation, and email-based login.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -27,14 +26,9 @@ def create_access_token(
     """
     Create a JWT access token for a user.
 
-    Per spec:
-    - Tokens expire after 1 hour (configurable via JWT_EXPIRY_SECONDS)
-    - Token includes user_id and scopes from the API key
-    - Scopes cannot exceed what the API key has
-
     Args:
         user_id: User ID (usr_xxx)
-        scopes: List of permission scopes (from API key)
+        scopes: List of permission scopes
         expires_delta: Custom expiration time (defaults to JWT_EXPIRY_SECONDS)
 
     Returns:
@@ -167,21 +161,21 @@ def is_token_expired(token: str) -> bool:
     return datetime.now(UTC) > datetime.fromtimestamp(exp, tz=UTC)
 
 
-async def authenticate_user(
+async def authenticate_user_by_email(
     db: "AsyncSession",
-    display_name: str,
+    email: str,
     password: str,
 ) -> "User | None":
     """
-    Verify display_name + password credentials.
+    Verify email + password credentials.
 
     Returns the User record on success, or None if credentials are invalid.
     Deliberately returns None for both "user not found" and "wrong password"
-    to prevent user enumeration.
+    to prevent email enumeration.
 
     Args:
         db: Async database session
-        display_name: The display name to look up
+        email: The email address to look up
         password: The plain-text password to verify
 
     Returns:
@@ -189,22 +183,37 @@ async def authenticate_user(
     """
     # Import here to avoid circular dependency at module load time
     from mnemo.services import user as user_service  # noqa: PLC0415
-    from mnemo.utils.password import verify_password  # noqa: PLC0415
+    from mnemo.utils.password import DUMMY_PASSWORD_HASH, verify_password  # noqa: PLC0415
 
-    user = await user_service.get_user_by_display_name(db, display_name)
+    user = await user_service.get_user_by_email(db, email)
+    # Always perform a bcrypt check path to avoid leaking timing information
+    # about whether the user exists. If the user is missing or has no
+    # password_hash, run a dummy verification against a valid bcrypt hash
+    # and then return None.
     if user is None:
+        verify_password(password, DUMMY_PASSWORD_HASH)
         return None
+
     if user.password_hash is None:
-        # Passwordless account; cannot authenticate via password
+        # Account exists but has no password set — still run dummy verify
+        verify_password(password, DUMMY_PASSWORD_HASH)
         return None
+
+    # Real user with a password hash — perform normal verification
     if not verify_password(password, user.password_hash):
         return None
+
     return user
 
 
-def scopes_for_role(role: str, admin_access_granted: bool) -> list[str]:
+def scopes_for_role(role: str) -> list[str]:
     """
     Return JWT token scopes appropriate for the given user role.
+
+    Note: The `admin_access_granted` flag is not used for authentication. Admin
+    scope is determined solely by the `role` field. The `admin_access_granted`
+    flag is separate and only controls whether admins are allowed to view a
+    user's decks (consent), it does not affect role-based authentication.
 
     Args:
         role: User role string ("user" or "admin")
@@ -214,6 +223,6 @@ def scopes_for_role(role: str, admin_access_granted: bool) -> list[str]:
     """
     from mnemo.core.constants import ADMIN_API_KEY_SCOPES, DEFAULT_API_KEY_SCOPES  # noqa: PLC0415
 
-    if role == "admin" and admin_access_granted:
+    if role == "admin":
         return [s.value for s in ADMIN_API_KEY_SCOPES]
     return [s.value for s in DEFAULT_API_KEY_SCOPES]

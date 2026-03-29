@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.core.constants import ErrorCode, PermissionScope
 from mnemo.main import app
-from mnemo.schemas.user import UserCreate
+from mnemo.schemas.user import UserProvisionRequest as UserCreate
 from mnemo.services.api_key import create_api_key
 from mnemo.services.user import create_user
 
@@ -12,6 +12,8 @@ from mnemo.services.user import create_user
 @pytest.mark.asyncio
 async def test_deck_progress_not_found_returns_404(db_session: AsyncSession) -> None:
     user_data = UserCreate(
+        email="deck-test@example.com",
+        password="securePass123",
         display_name="Deck Test",
         country="US",
         timezone="America/New_York",

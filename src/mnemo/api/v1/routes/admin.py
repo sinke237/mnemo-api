@@ -1,9 +1,6 @@
 """
 Admin routes.
-Provides user management and consent-gated deck access for admin users.
-
-All endpoints require a valid JWT with role = "admin" (scope = "admin").
-Non-admin JWTs receive 403, not 401.
+Uses unified provisioning function, supports both test and live API keys.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -13,6 +10,7 @@ from mnemo.api.dependencies import get_current_user_from_token, require_user_sco
 from mnemo.core.constants import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, ErrorCode, PermissionScope
 from mnemo.core.exceptions import (
     DisplayNameConflictError,
+    EmailConflictError,
     InvalidCountryCodeError,
     InvalidTimezoneError,
     MissingTimezoneError,
@@ -22,16 +20,15 @@ from mnemo.models.user import User
 from mnemo.schemas.deck import DeckListItem, DeckListResponse
 from mnemo.schemas.error import ErrorResponse
 from mnemo.schemas.user import (
-    AdminProvisionRequest,
     ProvisionResponse,
     UserListItem,
     UserListResponse,
+    UserProvisionRequest,
 )
 from mnemo.services import deck as deck_service
 from mnemo.services import user as user_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-# module-level Depends singletons to satisfy ruff B008
 db_dep = Depends(get_db)
 current_user_dep = Depends(get_current_user_from_token)
 _require_admin = Depends(require_user_scope(PermissionScope.ADMIN))
@@ -43,34 +40,62 @@ _require_admin = Depends(require_user_scope(PermissionScope.ADMIN))
     response_model=ProvisionResponse,
     dependencies=[_require_admin],
     responses={
+        201: {
+            "description": "User created; returns a one-time API key and its type (live or test)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "user_id": "usr_9c8b7a6d5e4f3a21",
+                        "email": "new.user@example.com",
+                        "api_key": "mnm_live_examplekey",
+                        "key_type": "live",
+                        "display_name": "New User",
+                        "role": "user",
+                        "email_verified": True,
+                    }
+                }
+            },
+        },
         403: {"model": ErrorResponse, "description": "Admin JWT required"},
-        409: {"model": ErrorResponse, "description": "Display name already taken"},
+        409: {"model": ErrorResponse, "description": "Email or display name already taken"},
         422: {"model": ErrorResponse, "description": "Validation error"},
     },
     summary="Admin — provision a new user",
     description=(
         "Admin-only. Creates a new user account, optionally assigning role='admin'. "
+        "Can create either test or live API keys via the create_live_key parameter. "
         "Returns a one-time plain API key — store it immediately."
     ),
 )
 async def admin_provision_user(
-    body: AdminProvisionRequest,
+    body: UserProvisionRequest,
     current_user: User = current_user_dep,
     db: AsyncSession = db_dep,
 ) -> ProvisionResponse:
-    """Admin provisions a new user (optionally admin role)."""
+    """
+    Admin provisions a new user (optionally admin role, optionally live key).
+
+    UNIFIED with public registration - uses the same provision_user service function.
+    """
+    # Default to "user" role if not specified
     role = body.role or "user"
 
+    # Admin can create live keys via the create_live_key parameter
+    create_live_key = body.create_live_key
+
     try:
-        user, plain_api_key = await user_service.provision_user(
+        user, plain_api_key, key_type = await user_service.provision_user(
             db=db,
-            display_name=body.display_name,
+            email=body.email,
+            password=body.password,
             country=body.country,
             timezone=body.timezone,
-            password=body.password,
+            display_name=body.display_name,
             role=role,
+            create_live_key=create_live_key,
         )
     except (
+        EmailConflictError,
         DisplayNameConflictError,
         InvalidCountryCodeError,
         InvalidTimezoneError,
@@ -82,9 +107,12 @@ async def admin_provision_user(
 
     return ProvisionResponse(
         user_id=user.id,
+        email=user.email,
         api_key=plain_api_key,
+        key_type=key_type,
         display_name=user.display_name,
         role=user.role,
+        email_verified=user.email_verified,
     )
 
 
@@ -96,12 +124,15 @@ async def admin_provision_user(
         403: {"model": ErrorResponse, "description": "Admin JWT required"},
     },
     summary="Admin — list all users",
-    description="Returns a paginated list of all users with deck counts.",
+    description=(
+        "Returns a paginated list of all users with deck counts. "
+        "Searchable by email or display name."
+    ),
 )
 async def list_users(
     page: int = Query(1, ge=1),
     per_page: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
-    search: str | None = Query(None, description="Partial match on display_name"),
+    search: str | None = Query(None, description="Partial match on display_name or email"),
     db: AsyncSession = db_dep,
 ) -> UserListResponse:
     """List all users (admin only)."""
@@ -110,9 +141,11 @@ async def list_users(
     items = [
         UserListItem(
             user_id=user.id,
+            email=user.email,
             display_name=user.display_name,
             country=user.country,
             role=user.role,
+            email_verified=user.email_verified,
             created_at=user.created_at,
             deck_count=deck_count,
             has_granted_admin_access=user.admin_access_granted,
@@ -181,9 +214,10 @@ async def delete_user(
     },
     summary="Admin — view a user's decks (consent-gated)",
     description=(
-        "Returns the target user's deck list.  Requires **both**:\n"
-        "1. A valid admin JWT (403 otherwise)\n"
-        "2. The target user has called POST /v1/user/grant-admin-access (403 otherwise)\n\n"
+        "Returns the target user's deck list. Requires a valid admin JWT and either:\n"
+        "1. The target user's global admin_access_granted flag is set, or\n"
+        "2. The target user has granted resource-specific consent via POST "
+        '/v1/user/grant-admin-access (resource="decks")\n\n'
         "Response shape is identical to GET /v1/decks."
     ),
 )
@@ -196,9 +230,6 @@ async def get_user_decks(
 ) -> DeckListResponse:
     """
     Return a user's decks — both admin JWT and user consent are required.
-
-    The admin_access_granted check runs AFTER the JWT admin-scope check so that both
-    requirements are enforced and neither leaks information about the other.
     """
     # Fetch target user
     target_user = await user_service.get_user_by_id(db, user_id)
@@ -214,8 +245,10 @@ async def get_user_decks(
             },
         )
 
-    # Consent gate — must be checked AFTER admin JWT verification (enforced by _require_admin)
-    if not target_user.admin_access_granted:
+    # Consent gate — must be checked AFTER admin JWT verification
+    has_global_flag = bool(target_user.admin_access_granted)
+    has_consent = await user_service.has_admin_consent(db=db, user_id=user_id, resource="decks")
+    if not (has_global_flag or has_consent):
         raise HTTPException(
             status_code=403,
             detail={

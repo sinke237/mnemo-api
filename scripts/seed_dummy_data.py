@@ -15,7 +15,7 @@ from sqlalchemy import delete, select
 from mnemo.core.constants import PermissionScope
 from mnemo.db.database import AsyncSessionLocal
 from mnemo.models.user import User
-from mnemo.schemas.user import UserCreate
+from mnemo.schemas.user import UserProvisionRequest
 from mnemo.services import deck as deck_service
 from mnemo.services import flashcard as flashcard_service
 from mnemo.services.api_key import create_api_key
@@ -43,18 +43,23 @@ async def _seed_data() -> dict[str, str]:
     async with AsyncSessionLocal() as session:
         admin = await create_user(
             session,
-            UserCreate(
+            UserProvisionRequest(
+                email="seed_admin@example.com",
+                password="Password123",
                 display_name="Seed Admin",
                 country="US",
                 timezone="America/New_York",
                 locale="en-US",
                 preferred_language="en",
                 daily_goal_cards=20,
+                role="admin",
             ),
         )
         user1 = await create_user(
             session,
-            UserCreate(
+            UserProvisionRequest(
+                email="seed_user1@example.com",
+                password="Password123",
                 display_name="Seed User 1",
                 country="CM",
                 timezone="Africa/Douala",
@@ -65,7 +70,9 @@ async def _seed_data() -> dict[str, str]:
         )
         user2 = await create_user(
             session,
-            UserCreate(
+            UserProvisionRequest(
+                email="seed_user2@example.com",
+                password="Password123",
                 display_name="Seed User 2",
                 country="GB",
                 timezone="Europe/London",

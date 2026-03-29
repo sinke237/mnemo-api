@@ -1,6 +1,6 @@
 """
 Authentication routes.
-Handles JWT token generation per spec section 02: Authentication.
+Handles JWT token generation with email-based login.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,7 +16,6 @@ from mnemo.services import auth as auth_service
 from mnemo.services import user as user_service
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
-# module-level Depends singleton to satisfy ruff B008
 db_dep = Depends(get_db)
 settings = get_settings()
 
@@ -28,7 +27,7 @@ settings = get_settings()
         401: {"model": ErrorResponse, "description": "Invalid API key or user not found"},
         403: {"model": ErrorResponse, "description": "Insufficient scope"},
     },
-    summary="Get JWT access token",
+    summary="Get JWT access token (API key authentication)",
     description=(
         "Exchange an API key and user_id for a short-lived JWT token. "
         "Tokens expire after 1 hour and must be refreshed by calling this endpoint again. "
@@ -40,12 +39,9 @@ async def get_access_token(
     db: AsyncSession = db_dep,
 ) -> TokenResponse:
     """
-    Generate a JWT access token.
-    Per spec:
-    - Requires valid API key and existing user_id
-    - Token expires after JWT_EXPIRY_SECONDS (default 3600 = 1 hour)
-    - Token scopes cannot exceed API key scopes
-    - Returns 401 if API key is invalid or user not found
+    Generate a JWT access token using API key authentication.
+
+    Returns 401 if API key is invalid or user not found.
     """
     # Validate API key
     api_key = await api_key_service.validate_api_key(db, request.api_key)
@@ -112,13 +108,12 @@ async def get_access_token(
     responses={
         401: {"model": ErrorResponse, "description": "Invalid credentials"},
     },
-    summary="Password login",
+    summary="Email + password login",
     description=(
-        "Authenticate with display_name + password and receive a short-lived JWT. "
+        "Authenticate with email + password and receive a short-lived JWT. "
         "Returns the same shape as POST /v1/auth/token so clients can use either "
-        "interchangeably.  Does NOT distinguish 'user not found' from 'wrong password' "
-        "to prevent user enumeration."
-        "\n\nPasswordless accounts must use POST /v1/auth/token instead."
+        "interchangeably. Does NOT distinguish 'user not found' from 'wrong password' "
+        "to prevent email enumeration."
     ),
 )
 async def login(
@@ -126,11 +121,11 @@ async def login(
     db: AsyncSession = db_dep,
 ) -> TokenResponse:
     """
-    Authenticate a user by display_name + password and return a JWT access token.
+    Authenticate a user by email + password and return a JWT access token.
 
     Security: always returns 401 'Invalid credentials' on failure — no enumeration.
     """
-    user = await auth_service.authenticate_user(db, request.display_name, request.password)
+    user = await auth_service.authenticate_user_by_email(db, request.email, request.password)
     if user is None:
         raise HTTPException(
             status_code=401,
@@ -143,7 +138,9 @@ async def login(
             },
         )
 
-    scopes = auth_service.scopes_for_role(user.role, user.admin_access_granted)
+    # Determine scopes based on the user's role; admin_access_granted is not
+    # used for authentication/authorization (it gates consent, not role).
+    scopes = auth_service.scopes_for_role(user.role)
     access_token = auth_service.create_access_token(user_id=user.id, scopes=scopes)
 
     return TokenResponse(
