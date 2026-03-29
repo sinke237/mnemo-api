@@ -29,7 +29,11 @@ profile:
 exclude:
   - name: All
     paths:
-      - apiapp
+      - apiapp/android
+      - apiapp/ios
+      - apiapp/windows
+      - apiapp/linux
+      - apiapp/macos
 
 projectJDK: "21" #(Applied in CI/CD pipeline)
 
