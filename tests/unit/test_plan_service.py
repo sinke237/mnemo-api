@@ -307,9 +307,13 @@ async def test_create_plan_happy_path() -> None:
     # All schedule dates must be YYYY-MM-DD strings
     for entry in plan.schedule:
         assert isinstance(entry, dict)
-        assert len(str(entry["date"])) == 10
-        assert str(entry["date"])[4] == "-" and str(entry["date"])[7] == "-"
-        assert int(entry["cards_to_study"]) >= 1
+        assert isinstance(entry["date"], str), f"date should be str, got {type(entry['date'])}"
+        assert isinstance(
+            entry["cards_to_study"], int
+        ), f"cards_to_study should be int, got {type(entry['cards_to_study'])}"
+        assert len(entry["date"]) == 10
+        assert entry["date"][4] == "-" and entry["date"][7] == "-"
+        assert entry["cards_to_study"] >= 1
 
 
 @pytest.mark.asyncio

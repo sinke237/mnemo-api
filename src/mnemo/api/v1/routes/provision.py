@@ -4,6 +4,7 @@ Handles public registration and admin-access consent toggling.
 """
 
 from datetime import UTC, datetime
+from typing import NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +30,7 @@ current_user_dep = Depends(get_current_user_from_token)
 
 
 # Helper to translate service exceptions into HTTPException with consistent payloads
-def _raise_provision_http_error(exc: Exception) -> None:
+def _raise_provision_http_error(exc: Exception) -> NoReturn:
     if isinstance(exc, DisplayNameConflictError):
         raise HTTPException(
             status_code=409,

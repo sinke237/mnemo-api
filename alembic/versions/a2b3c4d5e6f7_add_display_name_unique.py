@@ -38,7 +38,8 @@ def upgrade() -> None:
     ).fetchone()
     if duplicate:
         raise Exception(
-            "Cannot add unique constraint 'uq_users_display_name': duplicate display_name '" + str(duplicate[0]) + "' found. "
+            "Cannot add unique constraint 'uq_users_display_name': "
+            f"duplicate display_name '{duplicate[0]}' found. "
             "Resolve or remove duplicates before running this migration."
         )
 

@@ -320,11 +320,15 @@ async def provision_user(
     db.add(user)
     try:
         await db.flush()
-    except IntegrityError:
-        # Race condition: another request inserted the same display_name
-        raise DisplayNameConflictError(  # noqa: B904
-            f"Display name '{display_name}' is already taken"
-        ) from None
+    except IntegrityError as exc:
+        # Only treat display-name constraint violations as conflicts;
+        # re-raise anything else so unrelated constraint failures aren't masked.
+        _exc_text = str(exc.orig) if exc.orig else str(exc)
+        if "uq_users_display_name" in _exc_text or "uq_users_normalized_display_name" in _exc_text:
+            raise DisplayNameConflictError(
+                f"Display name '{display_name}' is already taken"
+            ) from None
+        raise
 
     # Determine API key scopes based on role
     scopes = (
@@ -375,9 +379,7 @@ async def list_users(
         # Escape backslashes first, then SQL wildcard characters so literal
         # backslashes, percent signs and underscores in the search string are
         # treated as literals rather than wildcards.
-        escaped = (
-            search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        )
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         where_clauses.append(User.display_name.ilike(f"%{escaped}%", escape="\\"))
 
     # Total count

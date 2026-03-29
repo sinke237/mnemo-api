@@ -7,9 +7,9 @@ Create Date: 2026-03-27 10:45:00.000000
 Add a normalized_display_name column and unique constraint to users.
 """
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy import text
+from alembic import op
+from sqlalchemy import column, func, table, text
 
 # revision identifiers, used by Alembic.
 revision = "b5c6d7e8f9a0"
@@ -43,20 +43,28 @@ def upgrade() -> None:
         if not rows:
             break
         ids = [r[0] for r in rows]
-        # Build a parametrized IN-clause to update only these rows
-        params = {f"id_{i}": id_ for i, id_ in enumerate(ids)}
-        placeholders = ", ".join(f":id_{i}" for i in range(len(ids)))
-        update_sql = text(
-            f"UPDATE users SET normalized_display_name = lower(trim(display_name)) WHERE id IN ({placeholders})"
+        # Use SQLAlchemy expression language to avoid raw SQL concatenation
+        users = table(
+            "users",
+            column("id"),
+            column("normalized_display_name"),
+            column("display_name"),
         )
-        conn.execute(update_sql, params)
+        stmt = (
+            users.update()
+            .where(users.c.id.in_(ids))
+            .values(
+                normalized_display_name=func.lower(func.trim(users.c.display_name))
+            )
+        )
+        conn.execute(stmt)
         # Attempt to commit so each batch runs in its own transaction; some
         # migration environments provide a Connection with commit(). If not,
         # ignore and continue.
         try:
             conn.commit()
-        except Exception:
-            pass
+        except AttributeError:
+            pass  # conn may not expose commit() in some environments
 
     # Ensure there are no duplicates in the normalized column before adding unique constraint
     dup_count = conn.execute(
@@ -69,13 +77,18 @@ def upgrade() -> None:
     ).scalar()
     if dup_count and int(dup_count) > 0:
         raise Exception(
-            "Cannot add unique constraint 'uq_users_normalized_display_name': duplicate normalized display_name(s) found. "
-            f"Resolve duplicates before running this migration (duplicate groups: {int(dup_count)})."
+            "Cannot add unique constraint "
+            "'uq_users_normalized_display_name': "
+            "duplicate normalized display_name(s) found. "
+            f"Resolve duplicates before running this migration "
+            f"(duplicate groups: {int(dup_count)})."
         )
 
     # Add unique constraint using batch_alter_table to support SQLite
     with op.batch_alter_table("users") as batch_op:
-        batch_op.create_unique_constraint("uq_users_normalized_display_name", ["normalized_display_name"])
+        batch_op.create_unique_constraint(
+            "uq_users_normalized_display_name", ["normalized_display_name"]
+        )
 
 
 def downgrade() -> None:
