@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     app_debug: bool = Field(default=False)
     log_level: str = Field(default="INFO")
     api_base_url: str = Field(default="http://localhost:8000")
+    # Public frontend base URL used to construct links sent to users (password
+    # resets, confirmations). In production this should be the HTTPS URL of the
+    # deployed frontend (e.g. https://app.example.com).
+    frontend_base_url: str = Field(default="http://localhost:3000")
 
     # ── Database ───────────────────────────────────────────────────────────────
     database_url: str = Field(
@@ -43,6 +47,13 @@ class Settings(BaseSettings):
     # Allow creation of live API keys via self-service endpoints when True.
     allow_live_keys: bool = Field(default=False)
 
+    # Secret used specifically for password reset token HMAC hashing. Separate
+    # from JWT secret so rotating JWT signing keys does not invalidate reset
+    # tokens. Use a long random value in production.
+    password_reset_secret: str = Field(
+        default="dev_password_reset_secret_replace_in_production_with_64_char_hex"
+    )
+
     # ── Rate Limiting ──────────────────────────────────────────────────────────
     rate_limit_read_per_minute: int = Field(default=600)
     rate_limit_write_per_minute: int = Field(default=120)
@@ -56,6 +67,18 @@ class Settings(BaseSettings):
 
     # ── Import ─────────────────────────────────────────────────────────────────
     csv_max_size_bytes: int = Field(default=5 * 1024 * 1024)  # 5 MB
+
+    # ── Email / SMTP ──────────────────────────────────────────────────────────
+    # When `smtp_enabled` is False the email sender will only log actions.
+    smtp_enabled: bool = Field(default=False)
+    smtp_host: str = Field(default="localhost")
+    smtp_port: int = Field(default=1025)
+    smtp_username: str | None = Field(default=None)
+    smtp_password: str | None = Field(default=None)
+    smtp_use_tls: bool = Field(default=False)
+    smtp_from_address: str = Field(default="no-reply@mnemo.local")
+    # Rate limit for password reset requests per email address (per hour).
+    password_reset_rate_limit_per_hour: int = Field(default=5)
 
     @field_validator("jwt_secret_key")
     @classmethod
@@ -77,6 +100,20 @@ class Settings(BaseSettings):
             return v  # allow in dev
         if len(v) < 32:
             raise ValueError("API_KEY_SECRET must be at least 32 characters")
+        return v
+
+    @field_validator("password_reset_secret")
+    @classmethod
+    def validate_password_reset_secret(cls, v: str, info: ValidationInfo) -> str:
+        if v == "dev_password_reset_secret_replace_in_production_with_64_char_hex":
+            if info.data.get("app_env", "development") != "development":
+                raise ValueError(
+                    "PASSWORD_RESET_SECRET must be set to a secure value "
+                    "in non-development environments"
+                )
+            return v  # allow in dev
+        if len(v) < 32:
+            raise ValueError("PASSWORD_RESET_SECRET must be at least 32 characters")
         return v
 
     @property

@@ -75,6 +75,18 @@ class UserProvisionRequest(BaseModel):
         examples=["Africa/Douala", "America/New_York"],
     )
 
+    # Optional user preferences accepted at provisioning
+    preferred_language: str | None = Field(
+        None,
+        description="Preferred language (ISO code, e.g. 'en')",
+        examples=["en", "fr"],
+    )
+    daily_goal_cards: int | None = Field(
+        None,
+        description="Optional daily goal for number of cards to study",
+        ge=0,
+    )
+
     # Admin-only fields (ignored in public endpoint)
     role: str | None = Field(
         None,

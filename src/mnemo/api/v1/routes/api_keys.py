@@ -164,7 +164,8 @@ async def list_api_keys(
             try:
                 parsed = json.loads(key.scopes)
                 if isinstance(parsed, list):
-                    scopes_parsed = parsed
+                    # Keep only string items; ignore invalid/non-string entries
+                    scopes_parsed = [s for s in parsed if isinstance(s, str)]
                 else:
                     scopes_parsed = []
             except (json.JSONDecodeError, ValueError, TypeError):

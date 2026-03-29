@@ -15,6 +15,7 @@ from mnemo.api.v1.routes import (
     health,
     imports,
     memory_states,
+    password,
     plan,
     progress,
     provision,
@@ -29,6 +30,7 @@ router.include_router(provision.router)
 router.include_router(api_keys.router)
 router.include_router(admin.router)
 router.include_router(users.router)
+router.include_router(password.router)
 router.include_router(countries.router)
 router.include_router(imports.router)
 router.include_router(decks.router)

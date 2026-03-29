@@ -3,12 +3,16 @@ Password management routes.
 Handles password change and reset functionality.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.api.dependencies import get_current_user_from_token
+from mnemo.core.config import get_settings
 from mnemo.core.constants import ErrorCode
 from mnemo.db.database import get_db
+from mnemo.db.redis import get_redis
 from mnemo.models.user import User
 from mnemo.schemas.error import ErrorResponse
 from mnemo.schemas.user import (
@@ -19,6 +23,9 @@ from mnemo.schemas.user import (
     ResetPasswordRequest,
     ResetPasswordResponse,
 )
+from mnemo.services import email as email_service
+from mnemo.services import password_reset as password_reset_service
+from mnemo.services import user as user_service
 from mnemo.utils.password import get_password_hash, verify_password
 
 router = APIRouter(prefix="/user", tags=["user"])
@@ -87,27 +94,58 @@ async def change_password(
 )
 async def request_password_reset(
     request: RequestPasswordResetRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = db_dep,
 ) -> RequestPasswordResetResponse:
     """
     Request a password reset email.
 
     Security: Always returns success to prevent email enumeration.
     """
-    # Implementation not ready: mark as not implemented to avoid silently
-    # claiming emails are sent while no token/email flow exists.
-    raise HTTPException(
-        status_code=501,
-        detail={
-            "error": {
-                "code": "NOT_IMPLEMENTED",
-                "message": (
-                    "Password reset request flow not yet implemented. "
-                    "TODO: generate token, persist it, and send reset email."
-                ),
-                "status": 501,
-            }
-        },
-    )
+    # Always return success to avoid account enumeration
+    # If an account exists, create a reset token and enqueue an email
+    try:
+        user = await user_service.get_user_by_email(db, request.email)
+    except Exception:
+        user = None
+
+    if user is not None:
+        # Rate limit password reset requests per email to mitigate abuse.
+        settings = get_settings()
+        redis = get_redis()
+        try:
+            key = f"prr:{user.email}"
+            count = await redis.incr(key)
+            # set expiry on first increment
+            if count == 1:
+                await redis.expire(key, 3600)
+            if count > settings.password_reset_rate_limit_per_hour:
+                # Silently succeed to avoid enumeration, but do not send another email.
+                return RequestPasswordResetResponse()
+        except Exception:
+            # If Redis is unavailable, fall back to best-effort behavior but
+            # record a warning so operators can investigate underlying issues.
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Redis unavailable for password reset rate limiting; continuing without rate-limit",
+                exc_info=True,
+            )
+
+        # Create token and enqueue email in the background. Token is returned
+        # plaintext once by create_token and stored hashed in DB.
+        token = await password_reset_service.create_token(db, user.id)
+        # Attach optional request id if present in state (for tracing)
+        # The password reset model has an optional `request_id` column; callers
+        # may populate this if desired.
+        settings = get_settings()
+        frontend = getattr(settings, "frontend_base_url", settings.api_base_url)
+        reset_url = f"{frontend}/reset-password#token={token}"
+        # Enqueue sending the email via BackgroundTasks (placeholder service)
+        background_tasks.add_task(
+            email_service.send_password_reset_email, user.email, reset_url, user_id=user.id
+        )
+
+    return RequestPasswordResetResponse()
 
 
 @router.post(
@@ -132,27 +170,44 @@ async def reset_password(
 
     TODO: Implement token validation and password reset.
     """
-    # TODO: Implement password reset
-    # 1. Validate token (check expiry, format)
-    # 2. Look up user associated with token
-    # 3. If valid:
-    #    a. Hash new password
-    #    b. Update user.password_hash
-    #    c. Invalidate/delete the reset token
-    #    d. Return success
-    # 4. If invalid/expired:
-    #    a. Return 400 with appropriate error
+    # 1. Validate token (check expiry, not used)
+    token_row = await password_reset_service.get_token_by_plain(db, request.token)
+    if token_row is None:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": ErrorCode.INVALID_TOKEN.value,
+                    "message": "Invalid or expired token",
+                    "status": 400,
+                }
+            },
+        )
 
-    raise HTTPException(
-        status_code=501,
-        detail={
-            "error": {
-                "code": "NOT_IMPLEMENTED",
-                "message": (
-                    "Password reset not yet implemented. "
-                    "TODO: Add token validation and email sending."
-                ),
-                "status": 501,
-            }
-        },
-    )
+    # 2. Resolve user (token stores user_id)
+    # Avoid accessing relationship attributes directly (which may trigger
+    # lazy-load IO in async context). Check the instance dict first to
+    # determine if the relationship is already loaded; otherwise fetch.
+    user = token_row.__dict__.get("user")
+    if user is None:
+        user = await user_service.get_user_by_id(db, token_row.user_id)
+
+    if user is None:
+        # Token references a missing user — treat as invalid
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": ErrorCode.INVALID_TOKEN.value,
+                    "message": "Invalid or expired token",
+                    "status": 400,
+                }
+            },
+        )
+
+    # 3. Update the user's password and mark token used
+    user.password_hash = get_password_hash(request.new_password)
+    await password_reset_service.mark_token_used(db, token_row.id)
+    await db.flush()
+
+    return ResetPasswordResponse()

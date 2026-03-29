@@ -15,6 +15,7 @@ from mnemo.db.database import Base
 
 if TYPE_CHECKING:
     from mnemo.models.session import Session
+    from mnemo.models.user_admin_consent import UserAdminConsent
 
 
 class User(Base):
@@ -74,6 +75,11 @@ class User(Base):
     # Relationships
     sessions: Mapped[list["Session"]] = relationship(
         "Session", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    # User -> UserAdminConsent relationship (reciprocal of UserAdminConsent.user)
+    consents: Mapped[list["UserAdminConsent"]] = relationship(
+        "UserAdminConsent", back_populates="user", cascade="all, delete-orphan"
     )
 
     @property

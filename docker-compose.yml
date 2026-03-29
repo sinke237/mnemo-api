@@ -33,6 +33,14 @@ services:
       timeout: 5s
       retries: 5
 
+  mailhog:
+    image: mailhog/mailhog
+    container_name: mnemo_mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+
   init-perms:
     image: alpine:3.20
     container_name: mnemo_init_perms
@@ -53,6 +61,12 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://mnemo:changeme_in_production@postgres:5432/mnemo
       REDIS_URL: redis://redis:6379/0
+      # Local SMTP/MailHog settings (overrides .env for convenience in dev)
+      SMTP_ENABLED: "true"
+      SMTP_HOST: "mailhog"
+      SMTP_PORT: "1025"
+      SMTP_USE_TLS: "false"
+      SMTP_FROM_ADDRESS: "no-reply@mnemo.local"
     ports:
       - "8000:8000"
     volumes:
@@ -69,6 +83,8 @@ services:
         condition: service_healthy
       migrator:
         condition: service_completed_successfully
+      mailhog:
+        condition: service_started
     # Invoke uvicorn via the python module so it works with the image build
     # approach that installs packages into site-packages without console scripts
     command: >

@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mnemo.core.constants import ADMIN_API_KEY_SCOPES, DEFAULT_API_KEY_SCOPES, PermissionScope
+from mnemo.core.constants import ADMIN_API_KEY_SCOPES, DEFAULT_API_KEY_SCOPES
 from mnemo.core.exceptions import (
     DisplayNameConflictError,
     EmailConflictError,
@@ -259,12 +259,11 @@ async def provision_user(
             ) from None
         raise
 
-    # Determine API key scopes based on role
-    scopes = (
-        [PermissionScope(s) for s in ADMIN_API_KEY_SCOPES]
-        if role == "admin"
-        else [PermissionScope(s) for s in DEFAULT_API_KEY_SCOPES]
-    )
+    # Determine API key scopes based on role. The module-level constants
+    # `ADMIN_API_KEY_SCOPES` and `DEFAULT_API_KEY_SCOPES` already contain
+    # `PermissionScope` members — copy them rather than re-wrapping to avoid
+    # unnecessary construction and potential mutation of the originals.
+    scopes = list(ADMIN_API_KEY_SCOPES) if role == "admin" else list(DEFAULT_API_KEY_SCOPES)
 
     # Create API key (test or live based on parameter)
     _, plain_api_key = await api_key_service.create_api_key(
@@ -400,7 +399,28 @@ async def create_admin_consent(
     """
     import secrets
 
+    # Check for an existing consent first to avoid duplicate global consents
+    from sqlalchemy import select
+
     from mnemo.models.user_admin_consent import UserAdminConsent
+
+    if resource_id is None:
+        existing_stmt = select(UserAdminConsent).where(
+            UserAdminConsent.user_id == user_id,
+            UserAdminConsent.resource_type == resource,
+            UserAdminConsent.resource_id.is_(None),
+        )
+    else:
+        existing_stmt = select(UserAdminConsent).where(
+            UserAdminConsent.user_id == user_id,
+            UserAdminConsent.resource_type == resource,
+            UserAdminConsent.resource_id == resource_id,
+        )
+
+    result = await db.execute(existing_stmt.limit(1))
+    existing = result.scalar_one_or_none()
+    if existing is not None:
+        return existing
 
     consent = UserAdminConsent(
         id=f"cnst_{secrets.token_hex(8)}",
@@ -411,7 +431,16 @@ async def create_admin_consent(
         expires_at=expires_at,
     )
     db.add(consent)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Concurrent insert created the same consent — return the existing one
+        result = await db.execute(existing_stmt.limit(1))
+        existing = result.scalar_one_or_none()
+        if existing is not None:
+            return existing
+        # If still not found, re-raise for visibility
+        raise
     return consent
 
 

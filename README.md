@@ -47,8 +47,7 @@ API docs: http://localhost:8000/docs
 
 ---
 
-Notes on API keys
------------------
+## Notes on API keys
 
 When a user is provisioned the response includes `api_key` and `key_type`.
 `key_type` will be `test` by default. Clients should display this clearly and

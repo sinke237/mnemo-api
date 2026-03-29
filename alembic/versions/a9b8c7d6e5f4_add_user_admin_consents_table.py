@@ -27,12 +27,6 @@ def upgrade() -> None:
         sa.Column("granted_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint(
-            "user_id",
-            "resource_type",
-            "resource_id",
-            name="uq_user_resource_consent",
-        ),
     )
     # Composite indexes to support common queries filtering by user and resource
     op.create_index(
@@ -40,15 +34,27 @@ def upgrade() -> None:
         "user_admin_consents",
         ["user_id", "resource_type"],
     )
+    # Enforce uniqueness for consent entries where resource_id IS NOT NULL
     op.create_index(
-        "ix_user_admin_consents_user_resource_id",
+        "uq_user_resource_consent_nonnull",
         "user_admin_consents",
         ["user_id", "resource_type", "resource_id"],
+        unique=True,
+        postgresql_where=sa.text("resource_id IS NOT NULL"),
+    )
+    # Enforce uniqueness for global (resource_id IS NULL) consents per user+resource_type
+    op.create_index(
+        "uq_user_resource_consent_global",
+        "user_admin_consents",
+        ["user_id", "resource_type"],
+        unique=True,
+        postgresql_where=sa.text("resource_id IS NULL"),
     )
 
 
 def downgrade() -> None:
-    # Drop composite indexes first
-    op.drop_index("ix_user_admin_consents_user_resource_id", table_name="user_admin_consents")
+    # Drop indexes first
+    op.drop_index("uq_user_resource_consent_global", table_name="user_admin_consents")
+    op.drop_index("uq_user_resource_consent_nonnull", table_name="user_admin_consents")
     op.drop_index("ix_user_admin_consents_user_resource", table_name="user_admin_consents")
     op.drop_table("user_admin_consents")

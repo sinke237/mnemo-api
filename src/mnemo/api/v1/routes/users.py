@@ -22,7 +22,12 @@ from mnemo.core.exceptions import (
 from mnemo.db.database import get_db
 from mnemo.models.user import User
 from mnemo.schemas.error import ErrorResponse
-from mnemo.schemas.user import UserProvisionRequest, UserResponse, UserUpdate
+from mnemo.schemas.user import (
+    ProvisionResponse,
+    UserProvisionRequest,
+    UserResponse,
+    UserUpdate,
+)
 from mnemo.services import user as user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -65,7 +70,7 @@ def _user_not_found(user_id: str) -> HTTPException:
 async def create_user(
     user_data: UserProvisionRequest,
     db: AsyncSession = db_dep,
-) -> UserResponse:
+) -> UserResponse | ProvisionResponse:
     """
     Create a new user account.
 
@@ -86,16 +91,24 @@ async def create_user(
             create_live_key=user_data.create_live_key,
         )
 
-        # NOTE: `user_service.provision_user` returns a plain API key as the
-        # second tuple element when `create_live_key` is True (see
-        # `provision_user`, `create_live_key`, and `_plain_api_key`).
-        #
-        # This handler intentionally returns only the `UserResponse` object
-        # (no plain API key) to avoid exposing credentials through this
-        # endpoint. If you want the plain API key to be returned here, swap
-        # to using `ProvisionResponse` (which includes `api_key`) or add
-        # a dedicated endpoint for key delivery. Keeping this comment makes
-        # the behavior explicit so `_plain_api_key` is not silently lost.
+        # `user_service.provision_user` returns a plain API key as the
+        # second tuple element when `create_live_key` is True. If the caller
+        # requested creation of a live key, return the `ProvisionResponse`
+        # which includes the one-time plaintext API key. Do NOT log or persist
+        # the plaintext key anywhere else.
+        if user_data.create_live_key:
+            return ProvisionResponse.model_validate(
+                {
+                    "user_id": user.id,
+                    "email": user.email,
+                    "api_key": _plain_api_key,
+                    "key_type": _key_type,
+                    "display_name": user.display_name,
+                    "role": user.role,
+                    "email_verified": user.email_verified,
+                }
+            )
+
         return UserResponse.model_validate(user)
 
     except InvalidCountryCodeError as e:

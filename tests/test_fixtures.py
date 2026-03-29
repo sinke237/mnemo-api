@@ -69,6 +69,9 @@ def authenticated_user() -> User:
         timezone="America/New_York",
         display_name="Test User",
     )
+    # Ensure defaults expected by production code are present on the test user
+    user.role = "user"
+    user.email_verified = False
     user.token_scopes = [scope.value for scope in PermissionScope]
     return user
 

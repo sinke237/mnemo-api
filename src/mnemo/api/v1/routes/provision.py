@@ -3,11 +3,11 @@ User provisioning routes.
 Unified public self-registration and admin user creation.
 """
 
+import logging
 from datetime import UTC, datetime
 from typing import NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mnemo.api.dependencies import get_current_user_from_token
@@ -33,6 +33,7 @@ from mnemo.services import user as user_service
 router = APIRouter(prefix="/user", tags=["user"])
 db_dep = Depends(get_db)
 current_user_dep = Depends(get_current_user_from_token)
+logger = logging.getLogger(__name__)
 
 
 def _raise_provision_http_error(exc: Exception) -> NoReturn:
@@ -184,7 +185,7 @@ async def grant_admin_access(
     body: GrantAdminAccessRequest | None = None,
     current_user: User = current_user_dep,
     db: AsyncSession = db_dep,
-) -> JSONResponse:
+) -> GrantAdminAccessResponse:
     """Allow admin users to view this user's deck list.
 
     If a body is supplied, create a per-resource consent record. If no body is
@@ -204,7 +205,8 @@ async def grant_admin_access(
             if granted_at is not None and not isinstance(granted_at, datetime):
                 # Coerce via isoformat if possible, otherwise discard
                 granted_at = datetime.fromisoformat(str(granted_at))
-        except Exception:
+        except (ValueError, TypeError):
+            logger.exception("Failed to parse granted_at value: %r", granted_at)
             granted_at = None
     else:
         # Create per-resource consent and use the persisted timestamp if available
@@ -224,17 +226,15 @@ async def grant_admin_access(
         try:
             if granted_at is not None and not isinstance(granted_at, datetime):
                 granted_at = datetime.fromisoformat(str(granted_at))
-        except Exception:
+        except (ValueError, TypeError):
+            logger.exception("Failed to parse granted_at value from consent: %r", granted_at)
             granted_at = None
 
     # Return a JSONResponse with serializable types to avoid accidental
     # non-serializable values (e.g., exception objects) making it into the body.
-    return JSONResponse(
-        status_code=200,
-        content={
-            "admin_access_granted": True,
-            "granted_at": granted_at.isoformat() if granted_at is not None else None,
-        },
+    return GrantAdminAccessResponse(
+        admin_access_granted=True,
+        granted_at=granted_at,
     )
 
 
@@ -251,7 +251,7 @@ async def revoke_admin_access(
     body: GrantAdminAccessRequest | None = None,
     current_user: User = current_user_dep,
     db: AsyncSession = db_dep,
-) -> JSONResponse:
+) -> GrantAdminAccessResponse:
     """Revoke admin users' permission to view this user's deck list.
 
     If a body is supplied, revoke matching per-resource consents. If no body is
@@ -261,15 +261,10 @@ async def revoke_admin_access(
         current_user.admin_access_granted = False
         current_user.admin_access_granted_at = None
         await db.flush()
-        return JSONResponse(
-            status_code=200,
-            content={"admin_access_granted": False, "granted_at": None},
-        )
+        return GrantAdminAccessResponse(admin_access_granted=False, granted_at=None)
 
     # Revoke per-resource consents matching the body
     await user_service.revoke_admin_consent(
         db=db, user_id=current_user.id, resource=body.resource, resource_id=body.resource_id
     )
-    return JSONResponse(
-        status_code=200, content={"admin_access_granted": False, "granted_at": None}
-    )
+    return GrantAdminAccessResponse(admin_access_granted=False, granted_at=None)

@@ -50,8 +50,19 @@ def upgrade() -> None:
     # Step 2: Backfill existing users with placeholder emails
     # IMPORTANT: In production, you should update these with real emails before making NOT NULL
     # Format: user_{id}@placeholder.mnemo.local
-    # Use a dialect-agnostic, batched update to avoid relying on CONCAT() and to reduce
-    # long-running locks on large tables (works on SQLite, Postgres, MySQL, etc.).
+    # NOTE: SELECT is batched but UPDATEs are performed per-row (one parameterised
+    # UPDATE query per id). The outer `while` loop uses `batch_size` to limit the
+    # number of rows selected per iteration; however each id in the batch is updated
+    # individually in the inner `for` loop to avoid dialect-specific string
+    # concatenation functions. This trades fewer SELECTs for many UPDATEs.
+    # Tradeoff / mitigation: committing between iterations of the outer loop
+    # (to avoid a single long-running transaction) or using a set-based UPDATE
+    # strategy are both valid approaches. This migration leaves per-id updates
+    # for dialect safety; consider adding an explicit commit between batches if
+    # your Alembic execution environment permits it to reduce lock durations.
+    # The relevant variables/blocks are `batch_size`, the outer `while` loop,
+    # and the per-id UPDATE block around `placeholder` + `sa.update(users_table)`.
+    # Use care if converting to a set-based update to ensure SQL injection safety.
     conn = op.get_bind()
     users_table = sa.table(
         "users",

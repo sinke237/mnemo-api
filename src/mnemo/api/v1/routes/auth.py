@@ -108,11 +108,12 @@ async def get_access_token(
     responses={
         401: {"model": ErrorResponse, "description": "Invalid credentials"},
     },
-    summary="Email + password login",
+    summary="Email + password login (scopes minted from user role)",
     description=(
         "Authenticate with email + password and receive a short-lived JWT. "
-        "Returns the same shape as POST /v1/auth/token so clients can use either "
-        "interchangeably. Does NOT distinguish 'user not found' from 'wrong password' "
+        "This endpoint mints scopes based on the authenticated user's role and "
+        "is NOT equivalent to POST /v1/auth/token, which inherits scopes from the "
+        "provided API key. Does NOT distinguish 'user not found' from 'wrong password' "
         "to prevent email enumeration."
     ),
 )
@@ -138,8 +139,12 @@ async def login(
             },
         )
 
-    # Determine scopes based on the user's role; admin_access_granted is not
-    # used for authentication/authorization (it gates consent, not role).
+    # Determine scopes based on the user's role. NOTE: these scopes are minted
+    # from the user's role and therefore differ from tokens generated via
+    # POST /v1/auth/token which inherit scopes from the API key used to mint
+    # the token.
+    # admin_access_granted is not used for authentication/authorization
+    # (it gates consent, not role).
     scopes = auth_service.scopes_for_role(user.role)
     access_token = auth_service.create_access_token(user_id=user.id, scopes=scopes)
 
